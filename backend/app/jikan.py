@@ -81,5 +81,33 @@ class JikanClient:
         self._cache[cache_key] = (now + self._cache_ttl, out)
         return out
 
+    async def director(self, mal_id: int) -> str | None:
+        cache_key = f"director::{mal_id}"
+        now = time.time()
+        cached = self._cache.get(cache_key)
+        if cached and cached[0] > now:
+            return cached[1]
+        try:
+            res = await self._http.get(f"{_BASE_URL}/anime/{mal_id}/staff")
+            res.raise_for_status()
+            data = res.json().get("data", [])
+        except Exception:
+            return None
+        director: str | None = None
+        for entry in data:
+            positions = entry.get("positions") or []
+            if not any(
+                "director" in str(p).lower() and "assistant" not in str(p).lower()
+                for p in positions
+            ):
+                continue
+            person = entry.get("person") or {}
+            name = person.get("name")
+            if name:
+                director = str(name)
+                break
+        self._cache[cache_key] = (now + self._cache_ttl, director)
+        return director
+
 
 jikan = JikanClient()

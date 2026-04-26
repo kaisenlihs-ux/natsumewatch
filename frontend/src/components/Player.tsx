@@ -47,9 +47,13 @@ export function Player({
   const [current, setCurrent] = useState(0);
   const [buffered, setBuffered] = useState(0);
   const [showControls, setShowControls] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
+  const [openMenu, setOpenMenu] = useState<"quality" | "speed" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rate, setRate] = useState(1);
+  const [subtitleTracks, setSubtitleTracks] = useState<
+    { id: number; label: string }[]
+  >([]);
+  const [subtitleId, setSubtitleId] = useState<number>(-1);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeSource = ordered.find((s) => s.quality === quality) || ordered[0];
@@ -90,6 +94,14 @@ export function Player({
         if (resumeAt > 1) video.currentTime = resumeAt;
         if (autoPlay) video.play().catch(() => {});
       });
+      const updateSubs = () => {
+        const list = hls.subtitleTracks ?? [];
+        setSubtitleTracks(
+          list.map((t, i) => ({ id: i, label: t.name || t.lang || `Дорожка ${i + 1}` })),
+        );
+      };
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, updateSubs);
+      hls.on(Hls.Events.MANIFEST_PARSED, updateSubs);
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (data.fatal) {
           switch (data.type) {
@@ -147,6 +159,21 @@ export function Player({
       v.removeEventListener("ended", onEnd);
     };
   }, [onEnded, onTimeUpdate]);
+
+  // ---- Apply subtitle selection ----
+  useEffect(() => {
+    if (hlsRef.current) {
+      hlsRef.current.subtitleTrack = subtitleId;
+      hlsRef.current.subtitleDisplay = subtitleId !== -1;
+    }
+    const v = videoRef.current;
+    if (v) {
+      const tracks = v.textTracks;
+      for (let i = 0; i < tracks.length; i++) {
+        tracks[i].mode = i === subtitleId ? "showing" : "disabled";
+      }
+    }
+  }, [subtitleId, subtitleTracks]);
 
   // ---- Auto-hide controls ----
   const bumpControls = useCallback(() => {
@@ -327,56 +354,93 @@ export function Player({
 
           <div className="ml-auto flex items-center gap-1">
             <div className="relative">
-              <ControlBtn onClick={() => setShowSettings((s) => !s)} label="Настройки">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                  <path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-1.9-3.3a.5.5 0 0 0-.6-.2l-2.4 1a7.6 7.6 0 0 0-1.7-1L14.5 3a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4L9.3 5.4a7.5 7.5 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2L2.7 8.9a.5.5 0 0 0 .1.6l2 1.6a7.5 7.5 0 0 0 0 2L2.8 14.7a.5.5 0 0 0-.1.6l1.9 3.3a.5.5 0 0 0 .6.2l2.4-1a7.5 7.5 0 0 0 1.7 1l.4 2.4a.5.5 0 0 0 .5.4h3.8a.5.5 0 0 0 .5-.4l.4-2.4a7.5 7.5 0 0 0 1.7-1l2.4 1a.5.5 0 0 0 .6-.2l1.9-3.3a.5.5 0 0 0-.1-.6l-2-1.6ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" />
-                </svg>
+              <ControlBtn
+                onClick={() =>
+                  setOpenMenu((m) => (m === "quality" ? null : "quality"))
+                }
+                label="Качество"
+                active={openMenu === "quality"}
+              >
+                <span className="text-[11px] font-semibold tabular-nums">
+                  {quality ? `${quality}p` : "HD"}
+                </span>
               </ControlBtn>
-              {showSettings && (
-                <div className="absolute bottom-12 right-0 w-44 overflow-hidden rounded-xl border border-bg-border bg-bg-panel/95 text-sm shadow-soft backdrop-blur">
-                  <div className="border-b border-bg-border px-3 py-2 text-xs uppercase tracking-wide text-white/50">
-                    Качество
-                  </div>
+              {openMenu === "quality" && (
+                <Menu title="Качество">
                   {ordered.map((s) => (
-                    <button
+                    <MenuItem
                       key={s.quality}
+                      active={quality === s.quality}
                       onClick={() => {
                         setQuality(s.quality);
-                        setShowSettings(false);
+                        setOpenMenu(null);
                       }}
-                      className={clsx(
-                        "flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-elevated",
-                        quality === s.quality && "text-brand-400",
-                      )}
                     >
                       {s.quality}p
-                      {quality === s.quality && <span>✓</span>}
-                    </button>
+                    </MenuItem>
                   ))}
-                  <div className="border-t border-bg-border px-3 py-2 text-xs uppercase tracking-wide text-white/50">
-                    Скорость
-                  </div>
+                </Menu>
+              )}
+            </div>
+            <div className="relative">
+              <ControlBtn
+                onClick={() =>
+                  setOpenMenu((m) => (m === "speed" ? null : "speed"))
+                }
+                label="Скорость"
+                active={openMenu === "speed"}
+              >
+                <span className="text-[11px] font-semibold tabular-nums">
+                  {rate}x
+                </span>
+              </ControlBtn>
+              {openMenu === "speed" && (
+                <Menu title="Скорость">
                   {[0.75, 1, 1.25, 1.5, 2].map((r) => (
-                    <button
+                    <MenuItem
                       key={r}
+                      active={rate === r}
                       onClick={() => {
                         setRate(r);
                         const v = videoRef.current;
                         if (v) v.playbackRate = r;
-                        setShowSettings(false);
+                        setOpenMenu(null);
                       }}
-                      className={clsx(
-                        "flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-elevated",
-                        rate === r && "text-brand-400",
-                      )}
                     >
                       {r}x
-                      {rate === r && <span>✓</span>}
-                    </button>
+                    </MenuItem>
                   ))}
-                </div>
+                </Menu>
               )}
             </div>
+            <ControlBtn
+              onClick={() => {
+                if (!subtitleTracks.length) return;
+                setSubtitleId((id) => (id === -1 ? 0 : -1));
+              }}
+              label={
+                subtitleTracks.length
+                  ? subtitleId !== -1
+                    ? "Субтитры выкл"
+                    : "Субтитры вкл"
+                  : "Субтитры недоступны"
+              }
+              active={subtitleId !== -1}
+              disabled={!subtitleTracks.length}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2.5" />
+                <path d="M6.5 14h3M11.5 14h6M6.5 11h6M14.5 11h3" />
+              </svg>
+            </ControlBtn>
             <ControlBtn onClick={toggleFullscreen} label="Во весь экран">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" strokeLinecap="round" />
@@ -393,19 +457,69 @@ function ControlBtn({
   onClick,
   label,
   children,
+  active,
+  disabled,
 }: {
   onClick: () => void;
   label: string;
   children: React.ReactNode;
+  active?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="grid h-9 w-9 place-items-center rounded-full text-white/85 transition hover:bg-white/10 hover:text-white"
+      disabled={disabled}
+      className={clsx(
+        "grid h-9 min-w-[2.25rem] place-items-center rounded-full px-2 text-white/85 transition",
+        disabled && "cursor-not-allowed opacity-40",
+        !disabled && "hover:bg-white/10 hover:text-white",
+        active && !disabled && "bg-white/15 text-white",
+      )}
     >
       {children}
+    </button>
+  );
+}
+
+function Menu({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="absolute bottom-12 right-0 w-40 overflow-hidden rounded-xl border border-bg-border bg-bg-panel/95 text-sm shadow-soft backdrop-blur">
+      <div className="border-b border-bg-border px-3 py-2 text-xs uppercase tracking-wide text-white/50">
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MenuItem({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        "flex w-full items-center justify-between px-3 py-2 text-left hover:bg-bg-elevated",
+        active && "text-brand-400",
+      )}
+    >
+      {children}
+      {active && <span>✓</span>}
     </button>
   );
 }

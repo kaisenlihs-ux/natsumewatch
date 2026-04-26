@@ -287,16 +287,15 @@ export type RatingsResponse = {
   ratings: ExternalRating[];
 };
 
-export type EpisodeDownload = {
-  ordinal: number;
-  name: string | null;
-  download_hls_480: string | null;
-  download_hls_720: string | null;
-  download_hls_1080: string | null;
-};
-
-export type DownloadsResponse = {
+export type AnimeMeta = {
   release_id: number | null;
   alias: string | null;
-  episodes: EpisodeDownload[];
+  title_japanese: string | null;
+  title_japanese_romaji: string | null;
+  title_english: string | null;
+  studios: string[];
+  director: string | null;
+  source: string | null;
+  source_label: string | null;
+  mal_id: number | null;
 };

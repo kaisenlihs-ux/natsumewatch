@@ -373,25 +373,100 @@ async def release_ratings(id_or_alias: str) -> dict[str, Any]:
     }
 
 
-@router.get("/{id_or_alias}/downloads")
-async def release_downloads(id_or_alias: str) -> dict[str, Any]:
+_SOURCE_LABELS_RU = {
+    "manga": "Манга",
+    "light novel": "Ранобэ",
+    "web manga": "Веб-манга",
+    "novel": "Новелла",
+    "web novel": "Веб-новелла",
+    "visual novel": "Визуальная новелла",
+    "original": "Оригинал",
+    "game": "Игра",
+    "card game": "Карточная игра",
+    "music": "Музыка",
+    "picture book": "Книга с картинками",
+    "4-koma manga": "4-кома манга",
+    "book": "Книга",
+    "radio": "Радио",
+    "other": "Другое",
+    "mixed media": "Смешанные источники",
+}
+
+
+def _ru_source_label(source: str | None) -> str | None:
+    if not source:
+        return None
+    key = source.strip().lower()
+    return _SOURCE_LABELS_RU.get(key) or source
+
+
+@router.get("/{id_or_alias}/meta")
+async def release_meta(id_or_alias: str) -> dict[str, Any]:
     try:
         rel = await anilibria.release(id_or_alias)
     except RuntimeError as exc:
         raise HTTPException(404, str(exc)) from exc
 
-    out = []
-    for ep in rel.get("episodes") or []:
-        out.append(
-            {
-                "ordinal": ep.get("ordinal"),
-                "name": ep.get("name"),
-                "download_hls_480": ep.get("hls_480"),
-                "download_hls_720": ep.get("hls_720"),
-                "download_hls_1080": ep.get("hls_1080"),
-            }
-        )
-    return {"release_id": rel.get("id"), "alias": rel.get("alias"), "episodes": out}
+    name = rel.get("name") or {}
+    en_title = name.get("english")
+    main_title = name.get("main")
+    year = rel.get("year")
+
+    jikan_item = await jikan.search_best(
+        title=en_title or main_title,
+        year=year,
+        alt_titles=[main_title, name.get("alternative")],
+    )
+
+    studios: list[str] = []
+    director: str | None = None
+    source_raw: str | None = None
+    title_japanese: str | None = None
+    title_romaji: str | None = None
+    mal_id: int | None = None
+
+    if jikan_item:
+        mal_id = jikan_item.get("mal_id")
+        title_japanese = jikan_item.get("title_japanese")
+        title_romaji = jikan_item.get("title")
+        source_raw = jikan_item.get("source")
+        for st in jikan_item.get("studios") or []:
+            label = st.get("name") if isinstance(st, dict) else None
+            if label:
+                studios.append(str(label))
+        if mal_id:
+            director = await jikan.director(mal_id)
+
+    if not studios:
+        # Fallback to Kodik material_data anime_studios when Jikan is silent.
+        items: list[dict[str, Any]] = []
+        if en_title:
+            items = await kodik.search(title=en_title, year=year, with_episodes=False)
+        if not items and main_title:
+            items = await kodik.search(title=main_title, year=year, with_episodes=False)
+        items = [it for it in items if _kodik_matches_release(it, rel)]
+        for it in items:
+            md = it.get("material_data") or {}
+            for label in md.get("anime_studios") or []:
+                if label and label not in studios:
+                    studios.append(str(label))
+            if not source_raw and md.get("source"):
+                source_raw = str(md.get("source"))
+            if studios:
+                break
+
+    return {
+        "release_id": rel.get("id"),
+        "alias": rel.get("alias"),
+        "title_japanese": title_japanese,
+        "title_japanese_romaji": title_romaji,
+        "title_english": en_title,
+        "studios": studios,
+        "director": director,
+        "source": source_raw,
+        "source_label": _ru_source_label(source_raw),
+        "mal_id": mal_id,
+    }
 
 
 @router.get("/{id_or_alias}/dubs")

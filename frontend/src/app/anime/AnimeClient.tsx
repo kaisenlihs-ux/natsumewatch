@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { apiFetch, fetcher } from "@/lib/api";
 import type {
+  AnimeMeta,
   DubAnilibriaEpisode,
   DubKodikEpisode,
   DubSource,
@@ -22,7 +23,6 @@ import { DubSwitcher } from "@/components/DubSwitcher";
 import { ListPicker } from "@/components/ListPicker";
 import { TorrentsList } from "@/components/TorrentsList";
 import { RatingsBar } from "@/components/RatingsBar";
-import { EpisodeDownloads } from "@/components/EpisodeDownloads";
 import { Comments } from "@/components/Comments";
 import { Reviews } from "@/components/Reviews";
 import { RatingWidget } from "@/components/RatingWidget";
@@ -53,6 +53,10 @@ export default function AnimeClient() {
   );
   const dubsSWR = useSWR<DubsResponse>(
     idOrAlias ? `/anime/${idOrAlias}/dubs` : null,
+    fetcher,
+  );
+  const metaSWR = useSWR<AnimeMeta>(
+    idOrAlias ? `/anime/${idOrAlias}/meta` : null,
     fetcher,
   );
 
@@ -134,6 +138,16 @@ export default function AnimeClient() {
   }
 
   const r = releaseSWR.data;
+  const meta = metaSWR.data;
+  const titleMain = r.name.main;
+  const titleEn = r.name.english;
+  // Latin/romaji title from Jikan ("Kimetsu no Yaiba"), fall back to AniLibria
+  // alternative (often Cyrillic transliteration) so the row is never empty.
+  const titleRomaji =
+    meta?.title_japanese_romaji && meta.title_japanese_romaji !== titleMain
+      ? meta.title_japanese_romaji
+      : r.name.alternative;
+  const titleJapanese = meta?.title_japanese ?? null;
 
   return (
     <div className="space-y-8">
@@ -191,12 +205,22 @@ export default function AnimeClient() {
                   </>
                 ) : null}
               </div>
-              <h1 className="font-display text-3xl font-bold leading-tight md:text-5xl">
-                {r.name.main}
-              </h1>
-              {r.name.english && (
-                <div className="text-sm text-white/60">{r.name.english}</div>
-              )}
+              <div className="space-y-1">
+                <h1 className="font-display text-3xl font-bold leading-tight md:text-5xl">
+                  {titleMain}
+                </h1>
+                {titleRomaji && (
+                  <div className="text-base text-white/75">{titleRomaji}</div>
+                )}
+                {titleEn && titleEn !== titleRomaji && (
+                  <div className="text-sm text-white/55">{titleEn}</div>
+                )}
+                {titleJapanese && (
+                  <div className="text-sm text-white/45" lang="ja">
+                    {titleJapanese}
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {(r.genres ?? []).map((g) => (
                   <Link
@@ -216,20 +240,35 @@ export default function AnimeClient() {
         </div>
       </div>
 
-      {/* ----- Dub picker ----- */}
-      {dubsSWR.isLoading ? (
-        <div className="skeleton h-24 w-full rounded-2xl" />
-      ) : sources.length ? (
-        <DubSwitcher
-          sources={sources}
-          active={activeSource}
-          onPick={setActiveSource}
-        />
-      ) : (
-        <div className="card p-4 text-sm text-white/65">
-          Источники для просмотра пока не найдены.
+      {/* ----- Description + meta + dub picker ----- */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4">
+          {r.description && (
+            <section className="card p-5">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-white/55">
+                Описание
+              </h2>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-white/85">
+                {r.description}
+              </p>
+            </section>
+          )}
+          {dubsSWR.isLoading ? (
+            <div className="skeleton h-24 w-full rounded-2xl" />
+          ) : sources.length ? (
+            <DubSwitcher
+              sources={sources}
+              active={activeSource}
+              onPick={setActiveSource}
+            />
+          ) : (
+            <div className="card p-4 text-sm text-white/65">
+              Источники для просмотра пока не найдены.
+            </div>
+          )}
         </div>
-      )}
+        <MetaSidebar release={r} meta={meta} />
+      </div>
 
       {/* ----- Player + episodes ----- */}
       {activeSource && activeEpisode ? (
@@ -291,16 +330,6 @@ export default function AnimeClient() {
         <div className="card p-6 text-white/70">Эпизоды пока недоступны.</div>
       )}
 
-      {/* ----- Description ----- */}
-      {r.description && (
-        <section className="card p-6">
-          <h2 className="mb-3 text-lg font-semibold">Описание</h2>
-          <p className="whitespace-pre-line text-sm leading-relaxed text-white/80">
-            {r.description}
-          </p>
-        </section>
-      )}
-
       {/* ----- Tabs ----- */}
       <div>
         <div className="mb-4 flex gap-2">
@@ -329,15 +358,110 @@ export default function AnimeClient() {
 
         {tab === "about" && <Stats r={r} />}
         {tab === "torrents" && (
-          <div className="space-y-4">
-            <EpisodeDownloads idOrAlias={r.alias || r.id} />
-            <TorrentsList idOrAlias={r.alias || r.id} />
-          </div>
+          <TorrentsList idOrAlias={r.alias || r.id} />
         )}
         {tab === "comments" && <Comments releaseId={r.id} />}
         {tab === "reviews" && <Reviews releaseId={r.id} />}
       </div>
     </div>
+  );
+}
+
+function MetaSidebar({
+  release,
+  meta,
+}: {
+  release: Release;
+  meta: AnimeMeta | undefined;
+}) {
+  const rows: { label: string; value: React.ReactNode }[] = [];
+  const studios = meta?.studios ?? [];
+  if (studios.length) {
+    rows.push({
+      label: "Студия",
+      value: (
+        <span className="font-medium text-white">{studios.join(", ")}</span>
+      ),
+    });
+  }
+  if (meta?.director) {
+    rows.push({
+      label: "Режиссёр",
+      value: <span className="font-medium text-white">{meta.director}</span>,
+    });
+  }
+  if (meta?.source_label) {
+    rows.push({
+      label: "Первоисточник",
+      value: (
+        <span className="font-medium text-white">{meta.source_label}</span>
+      ),
+    });
+  }
+  if (release.type?.description) {
+    rows.push({
+      label: "Тип",
+      value: (
+        <span className="font-medium text-white">
+          {release.type.description}
+        </span>
+      ),
+    });
+  }
+  if (release.year) {
+    rows.push({
+      label: "Год",
+      value: <span className="font-medium text-white">{release.year}</span>,
+    });
+  }
+  if (release.episodes_total) {
+    rows.push({
+      label: "Эпизодов",
+      value: (
+        <span className="font-medium text-white">
+          {release.episodes_total}
+        </span>
+      ),
+    });
+  }
+  if (release.average_duration_of_episode) {
+    rows.push({
+      label: "Длительность",
+      value: (
+        <span className="font-medium text-white">
+          {release.average_duration_of_episode} мин
+        </span>
+      ),
+    });
+  }
+  if (release.age_rating?.label) {
+    rows.push({
+      label: "Возраст",
+      value: (
+        <span className="font-medium text-white">
+          {release.age_rating.label}
+        </span>
+      ),
+    });
+  }
+
+  if (!rows.length) return null;
+
+  return (
+    <aside className="card divide-y divide-bg-border/40 self-start p-0">
+      <div className="px-5 py-3 text-sm font-semibold uppercase tracking-wide text-white/55">
+        О тайтле
+      </div>
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          className="flex items-start justify-between gap-4 px-5 py-2.5 text-sm"
+        >
+          <span className="text-white/55">{row.label}</span>
+          <span className="text-right">{row.value}</span>
+        </div>
+      ))}
+    </aside>
   );
 }
 

@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Rubik } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { PresenceProvider } from "@/components/PresenceProvider";
 
 const rubik = Rubik({
@@ -29,8 +31,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <PresenceProvider />
         <Header />
-        <main className="container-page py-6 md:py-10">{children}</main>
+        <main className="container-page py-6 pb-24 md:py-10 md:pb-10">{children}</main>
         <Footer />
+        <Suspense fallback={null}>
+          <MobileBottomNav />
+        </Suspense>
       </body>
     </html>
   );
