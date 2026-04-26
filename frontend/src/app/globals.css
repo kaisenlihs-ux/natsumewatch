@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Inter", "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0a0613;
+  color: #f5f3ff;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgba(244, 63, 94, 0.4);
+  color: #fff;
+}
+
+/* Subtle starfield + aurora glow on the body */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(139, 92, 246, 0.25), transparent 60%),
+    radial-gradient(900px 600px at 0% 30%, rgba(244, 63, 94, 0.18), transparent 55%),
+    radial-gradient(1200px 800px at 50% 110%, rgba(124, 58, 237, 0.22), transparent 60%);
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-[1400px] px-4 md:px-8;
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply btn bg-brand-500 text-white shadow-glow hover:bg-brand-400;
+  }
+  .btn-ghost {
+    @apply btn border border-bg-border/80 bg-bg-panel/60 text-white/90 backdrop-blur hover:bg-bg-elevated;
+  }
+  .btn-icon {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-full border border-bg-border bg-bg-panel/60 text-white/80 backdrop-blur transition hover:bg-bg-elevated;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-bg-border/80 bg-bg-panel/60 px-3 py-1 text-xs text-white/80;
+  }
+  .field {
+    @apply w-full rounded-xl border border-bg-border bg-bg-panel/70 px-4 py-2.5 text-sm text-white placeholder-white/40 outline-none transition focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30;
+  }
+  .card {
+    @apply relative overflow-hidden rounded-2xl border border-bg-border/70 bg-bg-panel/60 backdrop-blur;
+  }
+  .skeleton {
+    @apply relative overflow-hidden bg-bg-elevated;
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { scrollbar-width: none; }
+}
+
+/* Custom video player styles */
+.player-wrap {
+  @apply relative aspect-video w-full overflow-hidden rounded-2xl bg-black;
+}
+.player-wrap video {
+  @apply h-full w-full;
+}
+.player-controls {
+  @apply absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-4 pb-3 pt-10 text-white opacity-0 transition-opacity;
+}
+.player-wrap.show-controls .player-controls,
+.player-wrap:hover .player-controls {
+  @apply opacity-100;
+}
+.player-progress {
+  @apply relative h-1.5 w-full cursor-pointer rounded-full bg-white/15;
+}
+.player-progress-fill {
+  @apply absolute inset-y-0 left-0 rounded-full bg-brand-500;
+}
+.player-progress-thumb {
+  @apply absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 transition;
+}
+.player-progress:hover .player-progress-thumb {
+  @apply opacity-100;
+}
