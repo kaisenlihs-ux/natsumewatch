@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Logo } from "./Logo";
 import { OnlineBadge } from "./OnlineBadge";
 import { SearchBox } from "./SearchBox";
+import { Avatar } from "./Avatar";
 import { useAuth } from "@/lib/auth";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
@@ -65,13 +66,11 @@ export function Header() {
               onClick={() => setOpen((o) => !o)}
               className="flex items-center gap-2 rounded-full border border-bg-border bg-bg-panel/70 py-1 pl-1 pr-3 transition hover:bg-bg-elevated"
             >
-              <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-accent-600 text-xs font-bold uppercase">
-                {user.username.slice(0, 1)}
-              </span>
+              <Avatar username={user.username} url={user.avatar_url} size={28} className="ring-0" />
               <span className="text-sm">{user.username}</span>
             </button>
             {open && (
-              <div className="absolute right-0 mt-2 w-48 overflow-hidden rounded-xl border border-bg-border bg-bg-panel shadow-soft">
+              <div className="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border border-bg-border bg-bg-panel shadow-soft">
                 <Link
                   href="/profile"
                   onClick={() => setOpen(false)}
@@ -79,12 +78,26 @@ export function Header() {
                 >
                   Профиль
                 </Link>
+                <Link
+                  href="/profile/lists?status=watching"
+                  onClick={() => setOpen(false)}
+                  className="block px-4 py-2.5 text-sm hover:bg-bg-elevated"
+                >
+                  Мои списки
+                </Link>
+                <Link
+                  href="/profile/settings"
+                  onClick={() => setOpen(false)}
+                  className="block px-4 py-2.5 text-sm hover:bg-bg-elevated"
+                >
+                  Настройки
+                </Link>
                 <button
                   onClick={() => {
                     logout();
                     setOpen(false);
                   }}
-                  className="block w-full px-4 py-2.5 text-left text-sm text-brand-400 hover:bg-bg-elevated"
+                  className="block w-full border-t border-bg-border px-4 py-2.5 text-left text-sm text-brand-400 hover:bg-bg-elevated"
                 >
                   Выйти
                 </button>

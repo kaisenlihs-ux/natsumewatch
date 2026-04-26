@@ -26,6 +26,13 @@ export function startPresenceHeartbeat() {
     } catch {
       /* ignore */
     }
+    if (typeof window !== "undefined" && localStorage.getItem("nw_token")) {
+      try {
+        await apiFetch("/me/heartbeat", { method: "POST" });
+      } catch {
+        /* ignore — token may be stale */
+      }
+    }
   };
   beat();
   timer = setInterval(beat, 45_000);

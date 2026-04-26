@@ -96,11 +96,14 @@ export type User = {
   username: string;
   email: string;
   avatar_url: string | null;
+  banner_url: string | null;
   bio: string | null;
+  history_enabled: boolean;
+  last_seen_at: string | null;
   created_at: string;
 };
 
-export type PublicUser = Omit<User, "email">;
+export type PublicUser = Omit<User, "email" | "history_enabled">;
 
 export type Comment = {
   id: number;
@@ -168,4 +171,104 @@ export type DubsResponse = {
   title_en: string | null;
   year: number | null;
   sources: DubSource[];
+};
+
+/* Lists / favorites */
+export type ListStatus =
+  | "planned"
+  | "watching"
+  | "watched"
+  | "postponed"
+  | "dropped"
+  | "favorite";
+
+export const LIST_STATUSES: ListStatus[] = [
+  "planned",
+  "watching",
+  "watched",
+  "postponed",
+  "dropped",
+  "favorite",
+];
+
+export const STATUS_LABELS: Record<ListStatus, string> = {
+  planned: "Запланировано",
+  watching: "Смотрю",
+  watched: "Просмотрено",
+  postponed: "Отложено",
+  dropped: "Брошено",
+  favorite: "Избранное",
+};
+
+export type ListItem = {
+  id: number;
+  release_id: number;
+  release_alias: string | null;
+  release_title: string | null;
+  release_title_en: string | null;
+  release_year: number | null;
+  release_type: string | null;
+  release_genres: string[] | null;
+  release_poster: string | null;
+  release_episodes_total: number | null;
+  status: ListStatus;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ListStatusCount = { status: ListStatus; count: number };
+
+/* Watch history */
+export type HistoryEntry = {
+  id: number;
+  release_id: number;
+  release_alias: string | null;
+  release_title: string | null;
+  release_poster: string | null;
+  episode_ordinal: number;
+  episode_name: string | null;
+  source_provider: string | null;
+  source_studio: string | null;
+  watched_at: string;
+};
+
+/* Stats */
+export type StatsBucket = { label: string; count: number };
+
+export type ProfileStats = {
+  total_watched: number;
+  total_watching: number;
+  total_planned: number;
+  total_postponed: number;
+  total_dropped: number;
+  total_favorite: number;
+  by_genre: StatsBucket[];
+  by_type: StatsBucket[];
+  by_year: StatsBucket[];
+};
+
+/* Torrents */
+export type Torrent = {
+  id: number;
+  label: string | null;
+  quality: string | null;
+  type: string | null;
+  codec: string | null;
+  size: number | null;
+  seeders: number | null;
+  leechers: number | null;
+  completed_times: number | null;
+  magnet: string | null;
+  filename: string | null;
+  episodes: string | null;
+  updated_at: string | null;
+  download_url: string | null;
+  is_hardsub: boolean | null;
+};
+
+export type TorrentsResponse = {
+  release_id: number | null;
+  alias: string | null;
+  torrents: Torrent[];
 };

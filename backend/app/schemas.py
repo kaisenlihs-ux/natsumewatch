@@ -7,7 +7,9 @@ class UserPublic(BaseModel):
     id: int
     username: str
     avatar_url: str | None = None
+    banner_url: str | None = None
     bio: str | None = None
+    last_seen_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -15,6 +17,7 @@ class UserPublic(BaseModel):
 
 class UserMe(UserPublic):
     email: EmailStr
+    history_enabled: bool = True
 
 
 class RegisterIn(BaseModel):
@@ -83,3 +86,90 @@ class WatchProgressIn(BaseModel):
 
 class OnlineStats(BaseModel):
     online: int
+
+
+# ----------------------- User profile / settings -----------------------
+
+
+class ProfileSettingsIn(BaseModel):
+    bio: str | None = Field(default=None, max_length=2000)
+    history_enabled: bool | None = None
+
+
+# ----------------------- Lists -----------------------
+
+
+class ListItemIn(BaseModel):
+    release_id: int
+    status: str = Field(pattern=r"^(planned|watching|watched|postponed|dropped|favorite)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class ListItemOut(BaseModel):
+    id: int
+    release_id: int
+    release_alias: str | None
+    release_title: str | None
+    release_title_en: str | None
+    release_year: int | None
+    release_type: str | None
+    release_genres: list[str] | None
+    release_poster: str | None
+    release_episodes_total: int | None
+    status: str
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ListStatusCount(BaseModel):
+    status: str
+    count: int
+
+
+# ----------------------- History -----------------------
+
+
+class HistoryEntryIn(BaseModel):
+    release_id: int
+    episode_ordinal: int
+    episode_name: str | None = None
+    source_provider: str | None = None
+    source_studio: str | None = None
+
+
+class HistoryEntryOut(BaseModel):
+    id: int
+    release_id: int
+    release_alias: str | None
+    release_title: str | None
+    release_poster: str | None
+    episode_ordinal: int
+    episode_name: str | None
+    source_provider: str | None
+    source_studio: str | None
+    watched_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ----------------------- Stats -----------------------
+
+
+class StatsBucket(BaseModel):
+    label: str
+    count: int
+
+
+class ProfileStats(BaseModel):
+    total_watched: int
+    total_watching: int
+    total_planned: int
+    total_postponed: int
+    total_dropped: int
+    total_favorite: int
+    by_genre: list[StatsBucket]
+    by_type: list[StatsBucket]
+    by_year: list[StatsBucket]

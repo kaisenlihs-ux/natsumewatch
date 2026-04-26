@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
-import { fetcher } from "@/lib/api";
+import { apiFetch, fetcher } from "@/lib/api";
 import type {
   DubAnilibriaEpisode,
   DubKodikEpisode,
@@ -14,10 +14,13 @@ import type {
   DubsResponse,
   Release,
 } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
 import { posterUrl } from "@/lib/posters";
 import { Player } from "@/components/Player";
 import { KodikPlayer } from "@/components/KodikPlayer";
 import { DubSwitcher } from "@/components/DubSwitcher";
+import { ListPicker } from "@/components/ListPicker";
+import { TorrentsList } from "@/components/TorrentsList";
 import { Comments } from "@/components/Comments";
 import { Reviews } from "@/components/Reviews";
 import { RatingWidget } from "@/components/RatingWidget";
@@ -51,9 +54,12 @@ export default function AnimeClient() {
     fetcher,
   );
 
-  const [tab, setTab] = useState<"about" | "comments" | "reviews">("about");
+  const [tab, setTab] = useState<"about" | "comments" | "reviews" | "torrents">(
+    "about",
+  );
   const [activeEp, setActiveEp] = useState<number>(1);
   const [activeSource, setActiveSource] = useState<DubSource | null>(null);
+  const { user } = useAuth();
 
   const sources = useMemo(() => dubsSWR.data?.sources ?? [], [dubsSWR.data]);
 
@@ -78,6 +84,32 @@ export default function AnimeClient() {
       null
     );
   }, [activeSource, activeEp]);
+
+  // Record watch history when a logged-in user picks an episode (debounced
+  // server-side: identical entries inside 60s are skipped).
+  useEffect(() => {
+    if (!user || !user.history_enabled) return;
+    if (!activeSource || !activeEpisode) return;
+    const releaseId = releaseSWR.data?.id;
+    if (!releaseId) return;
+    const epName =
+      activeSource.provider === "anilibria"
+        ? (activeEpisode as DubAnilibriaEpisode).name
+        : null;
+    const handle = window.setTimeout(() => {
+      apiFetch("/me/history", {
+        method: "POST",
+        body: JSON.stringify({
+          release_id: releaseId,
+          episode_ordinal: activeEpisode.ordinal,
+          episode_name: epName,
+          source_provider: activeSource.provider,
+          source_studio: activeSource.studio,
+        }),
+      }).catch(() => {});
+    }, 1500);
+    return () => window.clearTimeout(handle);
+  }, [user, activeSource, activeEpisode, releaseSWR.data?.id]);
 
   if (!idOrAlias)
     return (
@@ -175,6 +207,7 @@ export default function AnimeClient() {
                 ))}
               </div>
               <RatingWidget releaseId={r.id} />
+              <ListPicker releaseId={r.id} className="pt-1" />
             </div>
           </div>
         </div>
@@ -271,6 +304,7 @@ export default function AnimeClient() {
           {(
             [
               ["about", "О тайтле"],
+              ["torrents", "Торренты"],
               ["reviews", "Рецензии"],
               ["comments", "Комментарии"],
             ] as const
@@ -291,6 +325,7 @@ export default function AnimeClient() {
         </div>
 
         {tab === "about" && <Stats r={r} />}
+        {tab === "torrents" && <TorrentsList idOrAlias={r.alias || r.id} />}
         {tab === "comments" && <Comments releaseId={r.id} />}
         {tab === "reviews" && <Reviews releaseId={r.id} />}
       </div>

@@ -1,18 +1,23 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.anilibria import anilibria
 from app.config import settings
 from app.db import init_db
 from app.kodik import kodik
-from app.routers import anime, auth, social, stats
+from app.routers import anime, auth, me, social, stats, users
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
+    os.makedirs(settings.uploads_dir, exist_ok=True)
+    os.makedirs(os.path.join(settings.uploads_dir, "avatars"), exist_ok=True)
+    os.makedirs(os.path.join(settings.uploads_dir, "banners"), exist_ok=True)
     yield
     await anilibria.close()
     await kodik.close()
@@ -38,6 +43,13 @@ app.include_router(auth.router)
 app.include_router(anime.router)
 app.include_router(social.router)
 app.include_router(stats.router)
+app.include_router(me.router)
+app.include_router(users.router)
+
+# Static serving for user-uploaded media (avatars / banners). The directory is
+# created on startup; mounting before it exists raises RuntimeError.
+os.makedirs(settings.uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads")
 
 
 @app.get("/healthz")

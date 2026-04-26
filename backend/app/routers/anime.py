@@ -92,6 +92,50 @@ async def release(id_or_alias: str) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.get("/{id_or_alias}/torrents")
+async def release_torrents(id_or_alias: str) -> dict[str, Any]:
+    """Normalized torrent list straight from AniLibria (1080p/720p/480p with
+    magnet + .torrent download links + episode range)."""
+    from app.config import settings
+
+    try:
+        rel = await anilibria.release(id_or_alias)
+    except RuntimeError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    torrents = rel.get("torrents") or []
+    out = []
+    for t in torrents:
+        tid = t.get("id")
+        out.append(
+            {
+                "id": tid,
+                "label": t.get("label"),
+                "quality": (t.get("quality") or {}).get("value"),
+                "type": (t.get("type") or {}).get("description")
+                or (t.get("type") or {}).get("value"),
+                "codec": (t.get("codec") or {}).get("description"),
+                "size": t.get("size"),
+                "seeders": t.get("seeders"),
+                "leechers": t.get("leechers"),
+                "completed_times": t.get("completed_times"),
+                "magnet": t.get("magnet"),
+                "filename": t.get("filename"),
+                "episodes": t.get("description"),
+                "updated_at": t.get("updated_at"),
+                "download_url": (
+                    f"{settings.anilibria_base_url}/anime/torrents/{tid}/file" if tid else None
+                ),
+                "is_hardsub": t.get("is_hardsub"),
+            }
+        )
+    return {
+        "release_id": rel.get("id"),
+        "alias": rel.get("alias"),
+        "torrents": out,
+    }
+
+
 def _ensure_https(link: str) -> str:
     if not link:
         return ""
@@ -140,7 +184,10 @@ def _kodik_episodes(
         season_key = next(iter(seasons))
         season = seasons[season_key]
         episodes = season.get("episodes") or {}
-        for ord_key in sorted(episodes.keys(), key=lambda k: float(k) if str(k).replace(".", "").isdigit() else 0):
+        def _ord_key(k: str) -> float:
+            return float(k) if str(k).replace(".", "").isdigit() else 0.0
+
+        for ord_key in sorted(episodes.keys(), key=_ord_key):
             entry = episodes[ord_key]
             link = entry.get("link") if isinstance(entry, dict) else entry
             try:
