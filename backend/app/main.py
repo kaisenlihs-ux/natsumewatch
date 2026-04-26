@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.anilibria import anilibria
 from app.config import settings
 from app.db import init_db
+from app.kodik import kodik
 from app.routers import anime, auth, social, stats
 
 
@@ -14,6 +15,7 @@ async def lifespan(_: FastAPI):
     await init_db()
     yield
     await anilibria.close()
+    await kodik.close()
 
 
 app = FastAPI(

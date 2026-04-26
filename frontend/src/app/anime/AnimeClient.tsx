@@ -3,39 +3,95 @@
 import useSWR from "swr";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { fetcher } from "@/lib/api";
-import type { Release } from "@/lib/types";
+import type {
+  DubAnilibriaEpisode,
+  DubKodikEpisode,
+  DubSource,
+  DubsResponse,
+  Release,
+} from "@/lib/types";
 import { posterUrl } from "@/lib/posters";
 import { Player } from "@/components/Player";
+import { KodikPlayer } from "@/components/KodikPlayer";
+import { DubSwitcher } from "@/components/DubSwitcher";
 import { Comments } from "@/components/Comments";
 import { Reviews } from "@/components/Reviews";
 import { RatingWidget } from "@/components/RatingWidget";
 import { formatDuration } from "@/lib/format";
 
+function pickDefault(sources: DubSource[]): DubSource | null {
+  if (!sources.length) return null;
+  // Prefer AniLibria native (HLS, our own player) — most stable.
+  return sources.find((s) => s.provider === "anilibria") ?? sources[0];
+}
+
+function clampOrdinal(source: DubSource | null, n: number): number {
+  if (!source) return n;
+  const max = source.episodes.length;
+  if (max === 0) return 1;
+  const ordinals = source.episodes.map((e) => e.ordinal);
+  if (ordinals.includes(n)) return n;
+  return ordinals[0];
+}
+
 export default function AnimeClient() {
   const sp = useSearchParams();
   const idOrAlias = sp.get("slug") || sp.get("id") || "";
-  const { data, isLoading, error } = useSWR<Release>(
+
+  const releaseSWR = useSWR<Release>(
     idOrAlias ? `/anime/${idOrAlias}` : null,
     fetcher,
   );
-  const [tab, setTab] = useState<"episodes" | "comments" | "reviews">("episodes");
+  const dubsSWR = useSWR<DubsResponse>(
+    idOrAlias ? `/anime/${idOrAlias}/dubs` : null,
+    fetcher,
+  );
+
+  const [tab, setTab] = useState<"about" | "comments" | "reviews">("about");
   const [activeEp, setActiveEp] = useState<number>(1);
+  const [activeSource, setActiveSource] = useState<DubSource | null>(null);
+
+  const sources = useMemo(() => dubsSWR.data?.sources ?? [], [dubsSWR.data]);
+
+  // Auto-pick a source as soon as the dubs response arrives.
+  useEffect(() => {
+    if (!activeSource && sources.length) {
+      setActiveSource(pickDefault(sources));
+    }
+  }, [sources, activeSource]);
+
+  // When user picks a different source, snap activeEp to the closest valid ordinal.
+  useEffect(() => {
+    if (!activeSource) return;
+    setActiveEp((n) => clampOrdinal(activeSource, n));
+  }, [activeSource]);
+
+  const activeEpisode = useMemo(() => {
+    if (!activeSource) return null;
+    return (
+      activeSource.episodes.find((e) => e.ordinal === activeEp) ??
+      activeSource.episodes[0] ??
+      null
+    );
+  }, [activeSource, activeEp]);
 
   if (!idOrAlias)
     return (
       <div className="card p-10 text-center text-white/70">Не указан тайтл.</div>
     );
 
-  if (error)
+  if (releaseSWR.error)
     return (
-      <div className="card p-10 text-center text-white/70">Не удалось загрузить тайтл.</div>
+      <div className="card p-10 text-center text-white/70">
+        Не удалось загрузить тайтл.
+      </div>
     );
 
-  if (isLoading || !data) {
+  if (releaseSWR.isLoading || !releaseSWR.data) {
     return (
       <div className="space-y-6">
         <div className="skeleton h-[420px] w-full rounded-3xl" />
@@ -43,16 +99,7 @@ export default function AnimeClient() {
     );
   }
 
-  const r = data;
-  const episodes = r.episodes ?? [];
-  const ep = episodes.find((e) => e.ordinal === activeEp) ?? episodes[0];
-  const sources = ep
-    ? [
-        { url: ep.hls_1080 || "", quality: "1080" },
-        { url: ep.hls_720 || "", quality: "720" },
-        { url: ep.hls_480 || "", quality: "480" },
-      ].filter((s) => s.url)
-    : [];
+  const r = releaseSWR.data;
 
   return (
     <div className="space-y-8">
@@ -133,35 +180,64 @@ export default function AnimeClient() {
         </div>
       </div>
 
+      {/* ----- Dub picker ----- */}
+      {dubsSWR.isLoading ? (
+        <div className="skeleton h-24 w-full rounded-2xl" />
+      ) : sources.length ? (
+        <DubSwitcher
+          sources={sources}
+          active={activeSource}
+          onPick={setActiveSource}
+        />
+      ) : (
+        <div className="card p-4 text-sm text-white/65">
+          Источники для просмотра пока не найдены.
+        </div>
+      )}
+
       {/* ----- Player + episodes ----- */}
-      {ep ? (
+      {activeSource && activeEpisode ? (
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-3">
-            <Player
-              key={ep.id + "-" + activeEp}
-              sources={sources}
-              poster={ep.preview ? posterUrl(ep.preview, "src") : posterUrl(r.poster, "src")}
-              title={`${r.name.main} · Серия ${ep.ordinal}${ep.name ? ` · ${ep.name}` : ""}`}
-              autoPlay={false}
+            <PlayerForSource
+              source={activeSource}
+              episode={activeEpisode}
+              titleMain={r.name.main}
+              fallbackPoster={posterUrl(r.poster, "src")}
             />
             <div className="flex items-center justify-between text-sm">
               <div className="text-white/70">
-                Серия {ep.ordinal}
-                {ep.name ? ` · ${ep.name}` : ""}
-                {ep.duration ? ` · ${formatDuration(ep.duration)}` : ""}
+                Серия {activeEpisode.ordinal}
+                {"name" in activeEpisode && activeEpisode.name
+                  ? ` · ${activeEpisode.name}`
+                  : ""}
+                {"duration" in activeEpisode && activeEpisode.duration
+                  ? ` · ${formatDuration(activeEpisode.duration)}`
+                  : ""}
               </div>
               <div className="flex gap-2">
                 <button
                   className="btn-ghost h-9"
                   disabled={activeEp <= 1}
-                  onClick={() => setActiveEp((n) => Math.max(1, n - 1))}
+                  onClick={() =>
+                    setActiveEp((n) =>
+                      clampOrdinal(activeSource, Math.max(1, n - 1)),
+                    )
+                  }
                 >
                   ← Пред
                 </button>
                 <button
                   className="btn-ghost h-9"
-                  disabled={activeEp >= episodes.length}
-                  onClick={() => setActiveEp((n) => Math.min(episodes.length, n + 1))}
+                  disabled={activeEp >= activeSource.episodes.length}
+                  onClick={() =>
+                    setActiveEp((n) =>
+                      clampOrdinal(
+                        activeSource,
+                        Math.min(activeSource.episodes.length, n + 1),
+                      ),
+                    )
+                  }
                 >
                   След →
                 </button>
@@ -169,45 +245,11 @@ export default function AnimeClient() {
             </div>
           </div>
 
-          <div className="card max-h-[60vh] overflow-y-auto p-2">
-            <div className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-white/50">
-              Эпизоды ({episodes.length})
-            </div>
-            <ul className="space-y-1">
-              {episodes.map((e) => (
-                <li key={e.id}>
-                  <button
-                    onClick={() => setActiveEp(e.ordinal)}
-                    className={clsx(
-                      "flex w-full items-center gap-3 rounded-xl border p-2 text-left transition",
-                      e.ordinal === activeEp
-                        ? "border-brand-400 bg-brand-500/10"
-                        : "border-transparent hover:border-bg-border hover:bg-bg-elevated",
-                    )}
-                  >
-                    <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md bg-bg-elevated">
-                      {e.preview?.src ? (
-                        <Image
-                          src={posterUrl(e.preview, "src")}
-                          alt=""
-                          fill
-                          sizes="80px"
-                          className="object-cover"
-                          unoptimized
-                        />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">Серия {e.ordinal}</div>
-                      <div className="truncate text-xs text-white/55">
-                        {e.name || "—"} · {formatDuration(e.duration)}
-                      </div>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <EpisodesList
+            source={activeSource}
+            activeEp={activeEp}
+            onPick={(ord) => setActiveEp(ord)}
+          />
         </div>
       ) : (
         <div className="card p-6 text-white/70">Эпизоды пока недоступны.</div>
@@ -228,7 +270,7 @@ export default function AnimeClient() {
         <div className="mb-4 flex gap-2">
           {(
             [
-              ["episodes", "О тайтле"],
+              ["about", "О тайтле"],
               ["reviews", "Рецензии"],
               ["comments", "Комментарии"],
             ] as const
@@ -248,10 +290,108 @@ export default function AnimeClient() {
           ))}
         </div>
 
-        {tab === "episodes" && <Stats r={r} />}
+        {tab === "about" && <Stats r={r} />}
         {tab === "comments" && <Comments releaseId={r.id} />}
         {tab === "reviews" && <Reviews releaseId={r.id} />}
       </div>
+    </div>
+  );
+}
+
+function PlayerForSource({
+  source,
+  episode,
+  titleMain,
+  fallbackPoster,
+}: {
+  source: DubSource;
+  episode: DubAnilibriaEpisode | DubKodikEpisode;
+  titleMain: string;
+  fallbackPoster: string;
+}) {
+  const playerKey = `${source.provider}::${source.studio}::${episode.ordinal}`;
+  const titleLabel = `${titleMain} · ${source.studio} · Серия ${episode.ordinal}`;
+
+  if (source.provider === "anilibria") {
+    const ep = episode as DubAnilibriaEpisode;
+    const sources = [
+      { url: ep.hls_1080 || "", quality: "1080" },
+      { url: ep.hls_720 || "", quality: "720" },
+      { url: ep.hls_480 || "", quality: "480" },
+    ].filter((s) => s.url);
+    return (
+      <Player
+        key={playerKey}
+        sources={sources}
+        poster={ep.preview ? posterUrl(ep.preview, "src") : fallbackPoster}
+        title={titleLabel}
+        autoPlay={false}
+      />
+    );
+  }
+
+  const ep = episode as DubKodikEpisode;
+  return <KodikPlayer key={playerKey} src={ep.iframe} title={titleLabel} />;
+}
+
+function EpisodesList({
+  source,
+  activeEp,
+  onPick,
+}: {
+  source: DubSource;
+  activeEp: number;
+  onPick: (ord: number) => void;
+}) {
+  return (
+    <div className="card max-h-[60vh] overflow-y-auto p-2">
+      <div className="px-3 py-2 text-xs font-medium uppercase tracking-wider text-white/50">
+        Эпизоды ({source.episodes.length}) · {source.studio}
+      </div>
+      <ul className="space-y-1">
+        {source.episodes.map((e) => {
+          const isActive = e.ordinal === activeEp;
+          const hasMeta = source.provider === "anilibria";
+          const al = source.provider === "anilibria" ? (e as DubAnilibriaEpisode) : null;
+          return (
+            <li key={`${source.provider}-${e.ordinal}`}>
+              <button
+                onClick={() => onPick(e.ordinal)}
+                className={clsx(
+                  "flex w-full items-center gap-3 rounded-xl border p-2 text-left transition",
+                  isActive
+                    ? "border-brand-400 bg-brand-500/10"
+                    : "border-transparent hover:border-bg-border hover:bg-bg-elevated",
+                )}
+              >
+                {hasMeta && al?.preview?.src ? (
+                  <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md bg-bg-elevated">
+                    <Image
+                      src={posterUrl(al.preview, "src")}
+                      alt=""
+                      fill
+                      sizes="80px"
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-bg-elevated text-xs text-white/45">
+                    {e.ordinal}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium">Серия {e.ordinal}</div>
+                  <div className="truncate text-xs text-white/55">
+                    {al?.name || (source.provider === "kodik" ? "Kodik · iframe" : "—")}
+                    {al?.duration ? ` · ${formatDuration(al.duration)}` : ""}
+                  </div>
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -263,27 +403,28 @@ function Stats({ r }: { r: Release }) {
     ["Сезон", r.season?.description],
     ["Возраст", r.age_rating?.label],
     ["День выхода", r.publish_day?.description],
-    ["Длительность серии", r.average_duration_of_episode ? `${r.average_duration_of_episode} мин` : null],
+    [
+      "Длительность серии",
+      r.average_duration_of_episode ? `${r.average_duration_of_episode} мин` : null,
+    ],
     ["Эпизодов", r.episodes_total],
     ["В избранном", r.added_in_users_favorites],
     ["Смотрят сейчас", r.added_in_watching_collection],
     ["Запланировали", r.added_in_planned_collection],
     ["Просмотрено", r.added_in_watched_collection],
-  ];
+  ].filter(([, v]) => v !== null && v !== undefined && v !== "") as [
+    string,
+    string | number,
+  ][];
+
   return (
-    <div className="card p-6">
-      <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2 md:grid-cols-3">
-        {rows.map(
-          ([k, v]) =>
-            v != null &&
-            v !== "" && (
-              <div key={k} className="flex items-baseline justify-between gap-3 border-b border-bg-border/40 py-2 text-sm">
-                <dt className="text-white/55">{k}</dt>
-                <dd className="text-right">{v}</dd>
-              </div>
-            ),
-        )}
-      </dl>
+    <div className="card grid gap-x-6 gap-y-3 p-6 text-sm md:grid-cols-3">
+      {rows.map(([k, v]) => (
+        <div key={k} className="flex items-center justify-between gap-3 text-white/75">
+          <span className="text-white/55">{k}</span>
+          <span className="font-medium text-white">{v}</span>
+        </div>
+      ))}
     </div>
   );
 }

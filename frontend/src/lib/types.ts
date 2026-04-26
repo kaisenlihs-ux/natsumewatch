@@ -124,3 +124,48 @@ export type RatingSummary = {
   count: number;
   user_score: number | null;
 };
+
+/* Dub / voice-over sources (AniLibria + Kodik aggregator) */
+
+export type DubAnilibriaEpisode = {
+  ordinal: number;
+  name: string | null;
+  duration: number | null;
+  preview: Poster | null;
+  hls_480: string | null;
+  hls_720: string | null;
+  hls_1080: string | null;
+};
+
+export type DubKodikEpisode = {
+  ordinal: number;
+  iframe: string;
+};
+
+export type DubSource =
+  | {
+      provider: "anilibria";
+      studio: string;
+      language: "ru";
+      kind: "voice";
+      episodes_count: number;
+      episodes: DubAnilibriaEpisode[];
+    }
+  | {
+      provider: "kodik";
+      studio: string;
+      language: "ru" | "en" | "ja";
+      kind: "voice" | "subtitles";
+      quality?: string | null;
+      episodes_count: number;
+      episodes: DubKodikEpisode[];
+    };
+
+export type DubsResponse = {
+  release_id: number | null;
+  alias: string | null;
+  title: string | null;
+  title_en: string | null;
+  year: number | null;
+  sources: DubSource[];
+};
