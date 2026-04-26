@@ -69,9 +69,25 @@ export default function AnimeClient() {
 
   const sources = useMemo(() => dubsSWR.data?.sources ?? [], [dubsSWR.data]);
 
-  // Auto-pick a source as soon as the dubs response arrives.
+  // Reset the active source when navigating between anime pages — Next.js
+  // keeps the same component mounted, so without this the previous title's
+  // source (and its 24 episodes) leaks onto the new title.
   useEffect(() => {
-    if (!activeSource && sources.length) {
+    setActiveSource(null);
+    setActiveEp(1);
+  }, [idOrAlias]);
+
+  // Auto-pick a source as soon as the dubs response arrives. Also re-pick if
+  // the current activeSource is not part of the new sources list (defensive
+  // against stale state across navigations).
+  useEffect(() => {
+    if (!sources.length) return;
+    const stillValid =
+      activeSource &&
+      sources.some(
+        (s) => s.provider === activeSource.provider && s.studio === activeSource.studio,
+      );
+    if (!stillValid) {
       setActiveSource(pickDefault(sources));
     }
   }, [sources, activeSource]);
