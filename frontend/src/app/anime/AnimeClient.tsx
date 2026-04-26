@@ -98,6 +98,8 @@ export default function AnimeClient() {
     if (!activeSource || !activeEpisode) return;
     const releaseId = releaseSWR.data?.id;
     if (!releaseId) return;
+    // History is keyed by integer release_id; skip ext (Kodik-only) titles.
+    if (typeof releaseId === "string" && releaseId.startsWith("ext-")) return;
     const epName =
       activeSource.provider === "anilibria"
         ? (activeEpisode as DubAnilibriaEpisode).name
@@ -139,6 +141,12 @@ export default function AnimeClient() {
 
   const r = releaseSWR.data;
   const meta = metaSWR.data;
+  // Kodik-only titles use a synthesized string id (`ext-shiki-<id>`). User-data
+  // features (lists / ratings / comments / reviews) are keyed by integer
+  // `release_id` in the DB, so we hide them for external titles. Player, dubs,
+  // meta and external ratings still work.
+  const isExternal =
+    typeof r.id === "string" && String(r.id).startsWith("ext-");
   const titleMain = r.name.main;
   const titleEn = r.name.english;
   // Latin/romaji title from Jikan ("Kimetsu no Yaiba"), fall back to AniLibria
@@ -232,9 +240,11 @@ export default function AnimeClient() {
                   </Link>
                 ))}
               </div>
-              <RatingWidget releaseId={r.id} />
+              {!isExternal && <RatingWidget releaseId={r.id as number} />}
               <RatingsBar idOrAlias={r.alias || r.id} />
-              <ListPicker releaseId={r.id} className="pt-1" />
+              {!isExternal && (
+                <ListPicker releaseId={r.id as number} className="pt-1" />
+              )}
             </div>
           </div>
         </div>
@@ -334,12 +344,14 @@ export default function AnimeClient() {
       <div>
         <div className="mb-4 flex gap-2">
           {(
-            [
-              ["about", "О тайтле"],
-              ["torrents", "Торренты"],
-              ["reviews", "Рецензии"],
-              ["comments", "Комментарии"],
-            ] as const
+            isExternal
+              ? ([["about", "О тайтле"]] as const)
+              : ([
+                  ["about", "О тайтле"],
+                  ["torrents", "Торренты"],
+                  ["reviews", "Рецензии"],
+                  ["comments", "Комментарии"],
+                ] as const)
           ).map(([k, label]) => (
             <button
               key={k}
@@ -357,11 +369,15 @@ export default function AnimeClient() {
         </div>
 
         {tab === "about" && <Stats r={r} />}
-        {tab === "torrents" && (
+        {!isExternal && tab === "torrents" && (
           <TorrentsList idOrAlias={r.alias || r.id} />
         )}
-        {tab === "comments" && <Comments releaseId={r.id} />}
-        {tab === "reviews" && <Reviews releaseId={r.id} />}
+        {!isExternal && tab === "comments" && (
+          <Comments releaseId={r.id as number} />
+        )}
+        {!isExternal && tab === "reviews" && (
+          <Reviews releaseId={r.id as number} />
+        )}
       </div>
     </div>
   );

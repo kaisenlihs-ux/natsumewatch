@@ -38,8 +38,12 @@ export type Episode = {
 };
 
 export type ReleaseSummary = {
-  id: number;
+  // Numeric for native AniLibria releases; synthesized string ("ext-shiki-NN")
+  // when the title is sourced from the Kodik fallback aggregator.
+  id: number | string;
   alias: string;
+  external_provider?: "kodik" | null;
+  external_shikimori_id?: string | null;
   type: Localized;
   year: number;
   name: { main: string; english: string | null; alternative: string | null };
