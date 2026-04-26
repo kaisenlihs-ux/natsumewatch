@@ -1,8 +1,9 @@
 "use client";
 
-import { use } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import useSWR from "swr";
+import { useSearchParams } from "next/navigation";
 import { fetcher, resolveMediaUrl } from "@/lib/api";
 import { Avatar } from "@/components/Avatar";
 import { UserOnlineDot } from "@/components/UserOnlineDot";
@@ -14,15 +15,18 @@ import {
 } from "@/lib/types";
 import { posterUrl } from "@/lib/posters";
 
-export default function PublicProfilePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
+function PublicProfile() {
+  const sp = useSearchParams();
+  const id = sp.get("id") ?? "";
+  const userSWR = useSWR<PublicUser>(id ? `/users/${id}` : null, fetcher);
+  const listsSWR = useSWR<ListItem[]>(id ? `/users/${id}/lists` : null, fetcher);
 
-  const userSWR = useSWR<PublicUser>(`/users/${id}`, fetcher);
-  const listsSWR = useSWR<ListItem[]>(`/users/${id}/lists`, fetcher);
+  if (!id)
+    return (
+      <div className="card p-10 text-center text-white/60">
+        Не указан id пользователя.
+      </div>
+    );
 
   if (userSWR.error)
     return (
@@ -115,5 +119,13 @@ export default function PublicProfilePage({
         </div>
       )}
     </div>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense fallback={<div className="card p-10 text-white/55">Загрузка…</div>}>
+      <PublicProfile />
+    </Suspense>
   );
 }
