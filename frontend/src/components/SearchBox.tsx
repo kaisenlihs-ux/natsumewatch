@@ -6,7 +6,13 @@ import { apiFetch } from "@/lib/api";
 import type { ReleaseSummary } from "@/lib/types";
 import { posterUrl } from "@/lib/posters";
 
-export function SearchBox() {
+export function SearchBox({
+  mobile = false,
+  onNavigate,
+}: {
+  mobile?: boolean;
+  onNavigate?: () => void;
+} = {}) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<ReleaseSummary[]>([]);
@@ -45,7 +51,7 @@ export function SearchBox() {
   }, [q]);
 
   return (
-    <div ref={wrap} className="relative w-full max-w-md">
+    <div ref={wrap} className={`relative w-full ${mobile ? "" : "max-w-md"}`}>
       <div className="relative">
         <svg
           viewBox="0 0 24 24"
@@ -59,6 +65,7 @@ export function SearchBox() {
         </svg>
         <input
           value={q}
+          autoFocus={mobile}
           onFocus={() => setOpen(true)}
           onChange={(e) => {
             setQ(e.target.value);
@@ -81,7 +88,10 @@ export function SearchBox() {
               <li key={r.id}>
                 <Link
                   href={`/anime?slug=${r.alias || r.id}`}
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    onNavigate?.();
+                  }}
                   className="flex items-center gap-3 px-3 py-2 hover:bg-bg-elevated"
                 >
                   <Image

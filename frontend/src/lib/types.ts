@@ -272,3 +272,31 @@ export type TorrentsResponse = {
   alias: string | null;
   torrents: Torrent[];
 };
+
+export type ExternalRating = {
+  source: string;
+  value: number | string | null;
+  votes: number | null;
+  url: string | null;
+  kind: "score" | "link" | "label";
+};
+
+export type RatingsResponse = {
+  release_id: number | null;
+  alias: string | null;
+  ratings: ExternalRating[];
+};
+
+export type EpisodeDownload = {
+  ordinal: number;
+  name: string | null;
+  download_hls_480: string | null;
+  download_hls_720: string | null;
+  download_hls_1080: string | null;
+};
+
+export type DownloadsResponse = {
+  release_id: number | null;
+  alias: string | null;
+  episodes: EpisodeDownload[];
+};

@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.anilibria import anilibria
+from app.jikan import jikan
 from app.kodik import kodik
 
 router = APIRouter(prefix="/api/anime", tags=["anime"])
@@ -155,6 +156,128 @@ def _kodik_studio(item: dict[str, Any]) -> str:
     return str(studio or "Озвучка")
 
 
+def _norm_text(text: str | None) -> str:
+    if not text:
+        return ""
+    return " ".join("".join(ch.lower() if ch.isalnum() else " " for ch in text).split())
+
+
+def _kodik_matches_release(item: dict[str, Any], rel: dict[str, Any]) -> bool:
+    name = rel.get("name") or {}
+    targets = {
+        _norm_text(name.get("main")),
+        _norm_text(name.get("english")),
+        _norm_text(name.get("alternative")),
+    }
+    targets.discard("")
+    if not targets:
+        return True
+
+    md = item.get("material_data") or {}
+    candidates = {
+        _norm_text(item.get("title")),
+        _norm_text(item.get("title_orig")),
+        _norm_text(item.get("other_title")),
+        _norm_text(md.get("title")),
+        _norm_text(md.get("title_en")),
+        _norm_text(md.get("anime_title")),
+    }
+    candidates.discard("")
+    if not candidates:
+        return False
+    for cand in candidates:
+        for target in targets:
+            if cand == target or cand in target or target in cand:
+                return True
+    return False
+
+
+def _is_red_tail_dorama(item: dict[str, Any]) -> bool:
+    studio = _kodik_studio(item).lower()
+    item_type = str(item.get("type") or "").lower()
+    if "red tail" not in studio:
+        return False
+    return "foreign" in item_type or "dorama" in item_type
+
+
+def _kodik_source_rank(item: dict[str, Any]) -> tuple[int, int, int]:
+    studio = _kodik_studio(item).lower()
+    tr = item.get("translation") or {}
+    kind = 1 if "subtitles" in str(tr.get("type") or "") else 0
+    quality = str(item.get("quality") or "")
+    quality_score = 0
+    if "1080" in quality:
+        quality_score = 3
+    elif "720" in quality:
+        quality_score = 2
+    elif "480" in quality:
+        quality_score = 1
+    studio_score = 0
+    if "anilibria" in studio or "aniliberty" in studio:
+        studio_score = 2
+    elif "crunchyroll" in studio:
+        studio_score = 1
+    return (kind, quality_score, studio_score)
+
+
+def _extract_external_ratings(
+    rel: dict[str, Any], kodik_items: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    out.append(
+        {
+            "source": "AniLibria",
+            "value": rel.get("age_rating", {}).get("label"),
+            "votes": None,
+            "url": f"https://anilibria.top/anime/releases/release/{rel.get('alias')}",
+            "kind": "label",
+        }
+    )
+
+    first = kodik_items[0] if kodik_items else {}
+    md = (first.get("material_data") if isinstance(first, dict) else None) or {}
+    shiki = md.get("shikimori_rating")
+    shiki_votes = md.get("shikimori_votes")
+    shiki_id = first.get("shikimori_id") if isinstance(first, dict) else None
+    if shiki is not None:
+        out.append(
+            {
+                "source": "Shikimori",
+                "value": shiki,
+                "votes": shiki_votes,
+                "url": f"https://shikimori.one/animes/{shiki_id}" if shiki_id else None,
+                "kind": "score",
+            }
+        )
+    imdb = md.get("imdb_rating")
+    imdb_votes = md.get("imdb_votes")
+    imdb_id = first.get("imdb_id") if isinstance(first, dict) else None
+    if imdb is not None or imdb_id:
+        out.append(
+            {
+                "source": "IMDb",
+                "value": imdb,
+                "votes": imdb_votes,
+                "url": f"https://www.imdb.com/title/{imdb_id}/" if imdb_id else None,
+                "kind": "score" if imdb is not None else "link",
+            }
+        )
+    kp = md.get("kinopoisk_rating")
+    kp_votes = md.get("kinopoisk_votes")
+    kp_id = first.get("kinopoisk_id") if isinstance(first, dict) else None
+    if kp is not None or kp_id:
+        out.append(
+            {
+                "source": "Кинопоиск",
+                "value": kp,
+                "votes": kp_votes,
+                "url": f"https://www.kinopoisk.ru/series/{kp_id}/" if kp_id else None,
+                "kind": "score" if kp is not None else "link",
+            }
+        )
+    return out
+
+
 def _kodik_language(item: dict[str, Any]) -> str:
     """Best-effort language detection from translation metadata.
 
@@ -208,6 +331,69 @@ def _kodik_episodes(
     return out
 
 
+@router.get("/{id_or_alias}/ratings")
+async def release_ratings(id_or_alias: str) -> dict[str, Any]:
+    try:
+        rel = await anilibria.release(id_or_alias)
+    except RuntimeError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    name = rel.get("name") or {}
+    year = rel.get("year")
+    en_title = name.get("english")
+    main_title = name.get("main")
+    items: list[dict[str, Any]] = []
+    if en_title:
+        items = await kodik.search(title=en_title, year=year, with_episodes=False)
+    if not items and main_title:
+        items = await kodik.search(title=main_title, year=year, with_episodes=False)
+    items = [item for item in items if _kodik_matches_release(item, rel)]
+
+    ratings = _extract_external_ratings(rel, items)
+    jikan_item = await jikan.search_best(
+        title=en_title or main_title,
+        year=year,
+        alt_titles=[main_title, name.get("alternative")],
+    )
+    if jikan_item and jikan_item.get("score") is not None:
+        ratings.append(
+            {
+                "source": "MyAnimeList",
+                "value": jikan_item.get("score"),
+                "votes": jikan_item.get("scored_by"),
+                "url": f"https://myanimelist.net/anime/{jikan_item.get('mal_id')}",
+                "kind": "score",
+            }
+        )
+
+    return {
+        "release_id": rel.get("id"),
+        "alias": rel.get("alias"),
+        "ratings": ratings,
+    }
+
+
+@router.get("/{id_or_alias}/downloads")
+async def release_downloads(id_or_alias: str) -> dict[str, Any]:
+    try:
+        rel = await anilibria.release(id_or_alias)
+    except RuntimeError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    out = []
+    for ep in rel.get("episodes") or []:
+        out.append(
+            {
+                "ordinal": ep.get("ordinal"),
+                "name": ep.get("name"),
+                "download_hls_480": ep.get("hls_480"),
+                "download_hls_720": ep.get("hls_720"),
+                "download_hls_1080": ep.get("hls_1080"),
+            }
+        )
+    return {"release_id": rel.get("id"), "alias": rel.get("alias"), "episodes": out}
+
+
 @router.get("/{id_or_alias}/dubs")
 async def dubs(id_or_alias: str) -> dict[str, Any]:
     """Aggregate available voice-over options across AniLibria and Kodik."""
@@ -255,8 +441,12 @@ async def dubs(id_or_alias: str) -> dict[str, Any]:
     if not items and main_title:
         items = await kodik.search(title=main_title, year=year, with_episodes=True)
 
-    seen: set[str] = set()
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
     for item in items:
+        if not _kodik_matches_release(item, rel):
+            continue
+        if _is_red_tail_dorama(item):
+            continue
         episodes = _kodik_episodes(item)
         if not episodes:
             continue
@@ -267,21 +457,38 @@ async def dubs(id_or_alias: str) -> dict[str, Any]:
             if "subtitles" in str((item.get("translation") or {}).get("type", ""))
             else "voice"
         )
-        dedup_key = f"{studio}::{lang}::{kind}::{len(episodes)}"
-        if dedup_key in seen:
+        dedup_key = (studio.lower(), lang, kind)
+        existing = grouped.get(dedup_key)
+        candidate = {
+            "provider": "kodik",
+            "studio": studio,
+            "language": lang,
+            "kind": kind,
+            "quality": item.get("quality"),
+            "episodes_count": len(episodes),
+            "episodes": episodes,
+            "_rank": _kodik_source_rank(item),
+        }
+        if existing is None:
+            grouped[dedup_key] = candidate
             continue
-        seen.add(dedup_key)
-        sources.append(
-            {
-                "provider": "kodik",
-                "studio": studio,
-                "language": lang,
-                "kind": kind,
-                "quality": item.get("quality"),
-                "episodes_count": len(episodes),
-                "episodes": episodes,
-            }
+        if candidate["episodes_count"] > existing["episodes_count"] or (
+            candidate["episodes_count"] == existing["episodes_count"]
+            and candidate["_rank"] > existing["_rank"]
+        ):
+            grouped[dedup_key] = candidate
+
+    kodik_sources = list(grouped.values())
+    kodik_sources.sort(
+        key=lambda s: (
+            {"ru": 0, "ja": 1, "en": 2}.get(s["language"], 9),
+            s["kind"] == "subtitles",
+            s["studio"].lower(),
         )
+    )
+    for item in kodik_sources:
+        item.pop("_rank", None)
+        sources.append(item)
 
     return {
         "release_id": rel.get("id"),

@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.anilibria import anilibria
 from app.config import settings
 from app.db import init_db
+from app.jikan import jikan
 from app.kodik import kodik
 from app.routers import anime, auth, me, social, stats, users
 
@@ -20,6 +21,7 @@ async def lifespan(_: FastAPI):
     os.makedirs(os.path.join(settings.uploads_dir, "banners"), exist_ok=True)
     yield
     await anilibria.close()
+    await jikan.close()
     await kodik.close()
 
 

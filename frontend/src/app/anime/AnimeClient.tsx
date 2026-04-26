@@ -21,6 +21,8 @@ import { KodikPlayer } from "@/components/KodikPlayer";
 import { DubSwitcher } from "@/components/DubSwitcher";
 import { ListPicker } from "@/components/ListPicker";
 import { TorrentsList } from "@/components/TorrentsList";
+import { RatingsBar } from "@/components/RatingsBar";
+import { EpisodeDownloads } from "@/components/EpisodeDownloads";
 import { Comments } from "@/components/Comments";
 import { Reviews } from "@/components/Reviews";
 import { RatingWidget } from "@/components/RatingWidget";
@@ -207,6 +209,7 @@ export default function AnimeClient() {
                 ))}
               </div>
               <RatingWidget releaseId={r.id} />
+              <RatingsBar idOrAlias={r.alias || r.id} />
               <ListPicker releaseId={r.id} className="pt-1" />
             </div>
           </div>
@@ -325,7 +328,12 @@ export default function AnimeClient() {
         </div>
 
         {tab === "about" && <Stats r={r} />}
-        {tab === "torrents" && <TorrentsList idOrAlias={r.alias || r.id} />}
+        {tab === "torrents" && (
+          <div className="space-y-4">
+            <EpisodeDownloads idOrAlias={r.alias || r.id} />
+            <TorrentsList idOrAlias={r.alias || r.id} />
+          </div>
+        )}
         {tab === "comments" && <Comments releaseId={r.id} />}
         {tab === "reviews" && <Reviews releaseId={r.id} />}
       </div>
