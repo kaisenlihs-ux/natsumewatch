@@ -80,7 +80,7 @@ export function SearchBox() {
             {results.map((r) => (
               <li key={r.id}>
                 <Link
-                  href={`/anime/${r.alias || r.id}`}
+                  href={`/anime?slug=${r.alias || r.id}`}
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-3 py-2 hover:bg-bg-elevated"
                 >

@@ -10,7 +10,7 @@ export default function RandomPage() {
   useEffect(() => {
     apiFetch<ReleaseSummary[]>("/anime/random?limit=1").then((d) => {
       const r = d?.[0];
-      if (r) router.replace(`/anime/${r.alias || r.id}`);
+      if (r) router.replace(`/anime?slug=${r.alias || r.id}`);
     });
   }, [router]);
   return (

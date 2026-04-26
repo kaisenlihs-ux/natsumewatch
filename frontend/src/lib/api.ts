@@ -1,5 +1,9 @@
-/* Tiny fetch wrapper. We use Next rewrites: client always calls /api/... */
-const PREFIX = "/api";
+/* Tiny fetch wrapper. Calls go to NEXT_PUBLIC_API_URL when set (production
+   static export), or to relative /api/... when running with the dev server +
+   Next rewrites. */
+const RAW = process.env.NEXT_PUBLIC_API_URL ?? "";
+const BASE = RAW.replace(/\/$/, "");
+const PREFIX = BASE ? `${BASE}/api` : "/api";
 
 export class ApiError extends Error {
   status: number;

@@ -6,7 +6,7 @@ import { posterUrl } from "@/lib/posters";
 export function PosterCard({ r }: { r: ReleaseSummary }) {
   return (
     <Link
-      href={`/anime/${r.alias || r.id}`}
+      href={`/anime?slug=${r.alias || r.id}`}
       className="group relative block aspect-[2/3] overflow-hidden rounded-xl border border-bg-border/60 bg-bg-panel transition hover:-translate-y-1 hover:shadow-glow"
     >
       <Image

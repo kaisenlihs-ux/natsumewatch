@@ -69,10 +69,10 @@ export function Hero() {
             </p>
           )}
           <div className="flex flex-wrap gap-3 pt-1">
-            <Link href={`/anime/${r.alias || r.id}`} className="btn-primary">
+            <Link href={`/anime?slug=${r.alias || r.id}`} className="btn-primary">
               <PlayIcon /> Смотреть
             </Link>
-            <Link href={`/anime/${r.alias || r.id}`} className="btn-ghost">
+            <Link href={`/anime?slug=${r.alias || r.id}`} className="btn-ghost">
               Подробнее
             </Link>
           </div>

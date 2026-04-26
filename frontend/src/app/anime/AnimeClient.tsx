@@ -3,7 +3,8 @@
 import useSWR from "swr";
 import Image from "next/image";
 import Link from "next/link";
-import { use, useState } from "react";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { fetcher } from "@/lib/api";
 import type { Release } from "@/lib/types";
@@ -14,16 +15,20 @@ import { Reviews } from "@/components/Reviews";
 import { RatingWidget } from "@/components/RatingWidget";
 import { formatDuration } from "@/lib/format";
 
-export default function AnimePage({
-  params,
-}: {
-  params: Promise<{ idOrAlias: string }>;
-}) {
-  const { idOrAlias } = use(params);
-  const { data, isLoading, error } = useSWR<Release>(`/anime/${idOrAlias}`, fetcher);
-
+export default function AnimeClient() {
+  const sp = useSearchParams();
+  const idOrAlias = sp.get("slug") || sp.get("id") || "";
+  const { data, isLoading, error } = useSWR<Release>(
+    idOrAlias ? `/anime/${idOrAlias}` : null,
+    fetcher,
+  );
   const [tab, setTab] = useState<"episodes" | "comments" | "reviews">("episodes");
   const [activeEp, setActiveEp] = useState<number>(1);
+
+  if (!idOrAlias)
+    return (
+      <div className="card p-10 text-center text-white/70">Не указан тайтл.</div>
+    );
 
   if (error)
     return (
