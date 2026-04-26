@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { useState } from "react";
 import { fetcher } from "@/lib/api";
 import type { TorrentsResponse } from "@/lib/types";
 
@@ -84,15 +85,55 @@ export function TorrentsList({ idOrAlias }: { idOrAlias: string | number }) {
                   .torrent
                 </a>
               )}
-              {t.magnet && (
-                <a href={t.magnet} className="btn-primary">
-                  Magnet
-                </a>
-              )}
+              {t.magnet && <MagnetButtons magnet={t.magnet} />}
             </div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function MagnetButtons({ magnet }: { magnet: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const onMagnet = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    // The browser hands the magnet link to whichever app is registered (qBittorrent
+    // / Transmission / etc). We assign window.location to force the navigation
+    // even when the anchor is opened via JS — Chrome ignores synthetic clicks on
+    // magnet anchors otherwise.
+    e.preventDefault();
+    try {
+      window.location.href = magnet;
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(magnet);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // Fallback for environments without clipboard permission
+      window.prompt("Скопируйте magnet-ссылку:", magnet);
+    }
+  };
+
+  return (
+    <>
+      <a href={magnet} onClick={onMagnet} className="btn-primary">
+        Magnet
+      </a>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="btn-ghost"
+        title="Скопировать magnet-ссылку"
+      >
+        {copied ? "Скопировано" : "Скопировать"}
+      </button>
+    </>
   );
 }

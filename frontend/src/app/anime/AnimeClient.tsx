@@ -60,8 +60,8 @@ export default function AnimeClient() {
     fetcher,
   );
 
-  const [tab, setTab] = useState<"about" | "comments" | "reviews" | "torrents">(
-    "about",
+  const [tab, setTab] = useState<"comments" | "reviews" | "torrents">(
+    "torrents",
   );
   const [activeEp, setActiveEp] = useState<number>(1);
   const [activeSource, setActiveSource] = useState<DubSource | null>(null);
@@ -356,45 +356,37 @@ export default function AnimeClient() {
         <div className="card p-6 text-white/70">Эпизоды пока недоступны.</div>
       )}
 
-      {/* ----- Tabs ----- */}
-      <div>
-        <div className="mb-4 flex gap-2">
-          {(
-            isExternal
-              ? ([["about", "О тайтле"]] as const)
-              : ([
-                  ["about", "О тайтле"],
-                  ["torrents", "Торренты"],
-                  ["reviews", "Рецензии"],
-                  ["comments", "Комментарии"],
-                ] as const)
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={clsx(
-                "rounded-full border px-4 py-2 text-sm transition",
-                tab === k
-                  ? "border-brand-400 bg-brand-500/15 text-brand-100"
-                  : "border-bg-border bg-bg-panel/60 text-white/70 hover:border-white/40",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* ----- Tabs (hidden for external Kodik-only titles) ----- */}
+      {!isExternal && (
+        <div>
+          <div className="mb-4 flex gap-2">
+            {(
+              [
+                ["torrents", "Торренты"],
+                ["reviews", "Рецензии"],
+                ["comments", "Комментарии"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={clsx(
+                  "rounded-full border px-4 py-2 text-sm transition",
+                  tab === k
+                    ? "border-brand-400 bg-brand-500/15 text-brand-100"
+                    : "border-bg-border bg-bg-panel/60 text-white/70 hover:border-white/40",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-        {tab === "about" && <Stats r={r} />}
-        {!isExternal && tab === "torrents" && (
-          <TorrentsList idOrAlias={r.alias || r.id} />
-        )}
-        {!isExternal && tab === "comments" && (
-          <Comments releaseId={r.id as number} />
-        )}
-        {!isExternal && tab === "reviews" && (
-          <Reviews releaseId={r.id as number} />
-        )}
-      </div>
+          {tab === "torrents" && <TorrentsList idOrAlias={r.alias || r.id} />}
+          {tab === "comments" && <Comments releaseId={r.id as number} />}
+          {tab === "reviews" && <Reviews releaseId={r.id as number} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -595,35 +587,4 @@ function EpisodesList({
   );
 }
 
-function Stats({ r }: { r: Release }) {
-  const rows: [string, string | number | null | undefined][] = [
-    ["Тип", r.type?.description],
-    ["Год", r.year],
-    ["Сезон", r.season?.description],
-    ["Возраст", r.age_rating?.label],
-    ["День выхода", r.publish_day?.description],
-    [
-      "Длительность серии",
-      r.average_duration_of_episode ? `${r.average_duration_of_episode} мин` : null,
-    ],
-    ["Эпизодов", r.episodes_total],
-    ["В избранном", r.added_in_users_favorites],
-    ["Смотрят сейчас", r.added_in_watching_collection],
-    ["Запланировали", r.added_in_planned_collection],
-    ["Просмотрено", r.added_in_watched_collection],
-  ].filter(([, v]) => v !== null && v !== undefined && v !== "") as [
-    string,
-    string | number,
-  ][];
 
-  return (
-    <div className="card grid gap-x-6 gap-y-3 p-6 text-sm md:grid-cols-3">
-      {rows.map(([k, v]) => (
-        <div key={k} className="flex items-center justify-between gap-3 text-white/75">
-          <span className="text-white/55">{k}</span>
-          <span className="font-medium text-white">{v}</span>
-        </div>
-      ))}
-    </div>
-  );
-}

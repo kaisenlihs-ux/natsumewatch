@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { useState } from "react";
 import type { DubSource } from "@/lib/types";
 
 const LANG_LABEL: Record<string, { label: string; flag: string }> = {
@@ -8,6 +9,9 @@ const LANG_LABEL: Record<string, { label: string; flag: string }> = {
   en: { label: "English", flag: "🇬🇧" },
   ja: { label: "日本語 (оригинал)", flag: "🇯🇵" },
 };
+
+// Show this many sources per language when collapsed.
+const COLLAPSED_LIMIT = 4;
 
 function sourceKey(s: DubSource): string {
   return `${s.provider}::${s.studio}::${s.kind}`;
@@ -22,6 +26,7 @@ export function DubSwitcher({
   active: DubSource | null;
   onPick: (s: DubSource) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   if (!sources.length) return null;
 
   // Group by language
@@ -36,7 +41,18 @@ export function DubSwitcher({
     groups.get(lang)!.push(s);
   }
 
+  // Sort each group by descending episode count so the "best" sources surface
+  // first when collapsed.
+  for (const arr of groups.values()) {
+    arr.sort((a, b) => (b.episodes_count ?? 0) - (a.episodes_count ?? 0));
+  }
+
   const activeKey = active ? sourceKey(active) : null;
+  const totalShown = order.reduce(
+    (sum, l) => sum + Math.min(groups.get(l)!.length, COLLAPSED_LIMIT),
+    0,
+  );
+  const canCollapse = sources.length > totalShown;
 
   return (
     <div className="card space-y-3 p-4">
@@ -51,7 +67,16 @@ export function DubSwitcher({
       <div className="space-y-3">
         {order.map((lang) => {
           const meta = LANG_LABEL[lang] ?? { label: lang.toUpperCase(), flag: "🌐" };
-          const items = groups.get(lang)!;
+          const fullItems = groups.get(lang)!;
+          // When collapsed, show the top N — but always include the active
+          // source so picking a deep cut and then re-collapsing doesn't hide it.
+          let items = fullItems;
+          if (!expanded && fullItems.length > COLLAPSED_LIMIT) {
+            const top = fullItems.slice(0, COLLAPSED_LIMIT);
+            const activeInGroup = fullItems.find((s) => sourceKey(s) === activeKey);
+            if (activeInGroup && !top.includes(activeInGroup)) top.push(activeInGroup);
+            items = top;
+          }
           return (
             <div key={lang}>
               <div className="mb-1.5 flex items-center gap-1.5 text-xs text-white/55">
@@ -94,6 +119,15 @@ export function DubSwitcher({
           );
         })}
       </div>
+      {canCollapse && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs font-medium text-brand-200 hover:text-brand-100"
+        >
+          {expanded ? "Свернуть" : `Показать все (${sources.length})`}
+        </button>
+      )}
     </div>
   );
 }

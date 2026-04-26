@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.anilibria import anilibria
 from app.jikan import jikan
 from app.kodik import kodik, kodik_to_release_shape
+from app.shikimori import shikimori
 
 router = APIRouter(prefix="/api/anime", tags=["anime"])
 
@@ -90,36 +91,68 @@ async def search(
             if t:
                 al_titles.add(t)
 
+    # Direct Kodik text search — works well for Latin / Japanese romaji queries
+    # (Kodik indexes title and title_orig in those scripts).
+    kodik_items: list[dict[str, Any]] = []
     try:
-        kodik_items = await kodik.search(title=q, with_episodes=False, limit=20)
+        kodik_items = await kodik.search(
+            title=q, title_orig=q, with_episodes=False, limit=20
+        )
     except Exception:  # noqa: BLE001
         kodik_items = []
 
-    out = list(al_items)
+    # Kodik's own text search doesn't index Russian titles — but Shikimori
+    # does. Resolve the query through Shikimori → shikimori_id → Kodik.
+    try:
+        shiki_hits = await shikimori.search(q, limit=10)
+    except Exception:  # noqa: BLE001
+        shiki_hits = []
+
     seen_shiki: set[str] = set()
-    for kitem in kodik_items:
-        if _is_red_tail_dorama(kitem):
+
+    async def _add_kitems(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        rels: list[dict[str, Any]] = []
+        for kitem in items:
+            if _is_red_tail_dorama(kitem):
+                continue
+            rel = kodik_to_release_shape(kitem)
+            if rel is None:
+                continue
+            shiki = rel["external_shikimori_id"]
+            if shiki in seen_shiki:
+                continue
+            seen_shiki.add(shiki)
+            rel_titles = {
+                _norm_text((rel.get("name") or {}).get("main")),
+                _norm_text((rel.get("name") or {}).get("english")),
+                _norm_text((rel.get("name") or {}).get("alternative")),
+            }
+            rel_titles.discard("")
+            if rel_titles & al_titles:
+                continue
+            rels.append(rel)
+        return rels
+
+    out = list(al_items)
+    out.extend(await _add_kitems(kodik_items))
+
+    # Pull Kodik items by shikimori_id for hits that the text search missed.
+    for hit in shiki_hits:
+        sid = hit.get("id")
+        if not sid or str(sid) in seen_shiki:
             continue
-        rel = kodik_to_release_shape(kitem)
-        if rel is None:
-            continue
-        shiki = rel["external_shikimori_id"]
-        if shiki in seen_shiki:
-            continue
-        seen_shiki.add(shiki)
-        # Drop if AniLibria already has a result with the same title.
-        rel_titles = {
-            _norm_text((rel.get("name") or {}).get("main")),
-            _norm_text((rel.get("name") or {}).get("english")),
-            _norm_text((rel.get("name") or {}).get("alternative")),
-        }
-        rel_titles.discard("")
-        if rel_titles & al_titles:
-            continue
-        out.append(rel)
-        if len(out) >= limit + 10:  # cap external results to avoid spam
+        if len(out) >= limit + 10:
             break
-    return out
+        try:
+            items = await kodik.search_by_shikimori(sid, with_episodes=False)
+        except Exception:  # noqa: BLE001
+            continue
+        if not items:
+            continue
+        out.extend(await _add_kitems(items[:1]))
+        if len(out) >= limit + 10:
+            break
+    return out[: limit + 10]
 
 
 @router.get("/catalog")

@@ -11,6 +11,7 @@ from app.db import init_db
 from app.jikan import jikan
 from app.kodik import kodik
 from app.routers import anime, auth, me, social, stats, users
+from app.shikimori import shikimori
 
 
 @asynccontextmanager
@@ -23,6 +24,7 @@ async def lifespan(_: FastAPI):
     await anilibria.close()
     await jikan.close()
     await kodik.close()
+    await shikimori.close()
 
 
 app = FastAPI(
