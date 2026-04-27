@@ -72,6 +72,9 @@ export default function CatalogPage() {
   }, []);
 
   const [f, setF] = useState<Filters>(initial);
+  // Filters are collapsed by default on narrow screens; the toggle below
+  // flips this. Desktop CSS forces them open via md: classes regardless.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Reflect filters in URL
   useEffect(() => {
@@ -93,6 +96,27 @@ export default function CatalogPage() {
   return (
     <div className="grid gap-8 md:grid-cols-[280px_1fr]">
       <aside className="card h-fit p-4 md:sticky md:top-20 md:max-h-[calc(100vh-7rem)] md:overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="mb-3 flex w-full items-center justify-between gap-2 rounded-lg border border-bg-border bg-bg-panel/60 px-3 py-2 text-sm font-medium text-white/80 hover:border-white/40 md:hidden"
+          aria-expanded={filtersOpen}
+        >
+          <span>{filtersOpen ? "Скрыть фильтры" : "Показать фильтры"}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            className={clsx(
+              "transition-transform",
+              filtersOpen ? "rotate-180" : "",
+            )}
+          >
+            <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <div className={clsx(filtersOpen ? "" : "hidden md:block")}>
         <FilterHeader title="Поиск">
           <input
             value={f.search}
@@ -273,6 +297,7 @@ export default function CatalogPage() {
         >
           Сбросить
         </button>
+        </div>
       </aside>
 
       <section>
