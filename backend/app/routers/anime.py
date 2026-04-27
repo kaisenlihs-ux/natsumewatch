@@ -594,6 +594,119 @@ async def release_meta(id_or_alias: str) -> dict[str, Any]:
     }
 
 
+async def _resolve_shikimori_id(
+    rel: dict[str, Any], ext_items: list[dict[str, Any]]
+) -> str | None:
+    """Find the Shikimori id for a release. Prefer kodik metadata; fall back
+    to a Shikimori text search by English/main/alternative titles."""
+    if ext_items:
+        sid = ext_items[0].get("shikimori_id") if isinstance(ext_items[0], dict) else None
+        if sid:
+            return str(sid)
+
+    name = rel.get("name") or {}
+    en_title = name.get("english")
+    main_title = name.get("main")
+    alt_title = name.get("alternative")
+    year = rel.get("year")
+
+    items: list[dict[str, Any]] = []
+    if en_title:
+        items = await kodik.search(title=en_title, year=year, with_episodes=False)
+    if not items and main_title:
+        items = await kodik.search(title=main_title, year=year, with_episodes=False)
+    items = [it for it in items if _kodik_matches_release(it, rel)]
+    for it in items:
+        sid = it.get("shikimori_id")
+        if sid:
+            return str(sid)
+
+    # Fallback: text search Shikimori directly.
+    for q in (en_title, main_title, alt_title):
+        if not q:
+            continue
+        hits = await shikimori.search(q, limit=5)
+        for h in hits:
+            hid = h.get("id")
+            if hid:
+                return str(hid)
+    return None
+
+
+_RELATION_RU = {
+    "sequel": "Сиквел",
+    "prequel": "Приквел",
+    "side_story": "Побочная история",
+    "side story": "Побочная история",
+    "spin_off": "Спин-офф",
+    "spin-off": "Спин-офф",
+    "summary": "Сборник",
+    "alternative_version": "Альтернативная версия",
+    "alternative version": "Альтернативная версия",
+    "alternative_setting": "Альтернативный мир",
+    "alternative setting": "Альтернативный мир",
+    "parent_story": "Родительская история",
+    "parent story": "Родительская история",
+    "full_story": "Полная история",
+    "full story": "Полная история",
+    "character": "Персонаж",
+    "other": "Другое",
+    "adaptation": "Адаптация",
+}
+
+
+@router.get("/{id_or_alias}/related")
+async def related(id_or_alias: str) -> list[dict[str, Any]]:
+    """Return franchise/related entries for a title via Shikimori."""
+    rel, ext_items = await _load_release(id_or_alias)
+    sid = await _resolve_shikimori_id(rel, ext_items)
+    if not sid:
+        return []
+
+    entries = await shikimori.related(sid)
+    out: list[dict[str, Any]] = []
+    for e in entries:
+        a = e.get("anime") or {}
+        aid = a.get("id")
+        if not aid:
+            continue
+        image = a.get("image") or {}
+        img_url = image.get("original") or image.get("preview")
+        if isinstance(img_url, str) and img_url.startswith("/"):
+            img_url = f"https://shikimori.one{img_url}"
+        relation_raw = (e.get("relation") or "").lower()
+        relation_ru = (
+            e.get("relation_russian")
+            or _RELATION_RU.get(relation_raw)
+            or e.get("relation")
+            or ""
+        )
+        out.append(
+            {
+                "shikimori_id": aid,
+                "alias": f"ext-shiki-{aid}",
+                "title": a.get("russian") or a.get("name") or a.get("english"),
+                "title_orig": a.get("name"),
+                "year": _shikimori_year(a),
+                "kind": a.get("kind"),
+                "score": a.get("score"),
+                "episodes": a.get("episodes"),
+                "image": img_url,
+                "relation": relation_raw,
+                "relation_label": relation_ru,
+                "external_url": f"https://shikimori.one/animes/{aid}",
+            }
+        )
+    return out
+
+
+def _shikimori_year(a: dict[str, Any]) -> int | None:
+    aired = a.get("aired_on") or a.get("released_on") or ""
+    if isinstance(aired, str) and len(aired) >= 4 and aired[:4].isdigit():
+        return int(aired[:4])
+    return None
+
+
 @router.get("/{id_or_alias}/dubs")
 async def dubs(id_or_alias: str) -> dict[str, Any]:
     """Aggregate available voice-over options across AniLibria and Kodik."""

@@ -138,6 +138,21 @@ export type Conversation = {
   messages: DirectMessage[];
 };
 
+export type RelatedItem = {
+  shikimori_id: number;
+  alias: string;
+  title: string | null;
+  title_orig: string | null;
+  year: number | null;
+  kind: string | null;
+  score: number | null;
+  episodes: number | null;
+  image: string | null;
+  relation: string;
+  relation_label: string;
+  external_url: string;
+};
+
 export type Comment = {
   id: number;
   body: string;

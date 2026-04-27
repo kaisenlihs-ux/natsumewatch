@@ -13,6 +13,7 @@ import type {
   DubKodikEpisode,
   DubSource,
   DubsResponse,
+  RelatedItem,
   Release,
 } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
@@ -59,10 +60,14 @@ export default function AnimeClient() {
     idOrAlias ? `/anime/${idOrAlias}/meta` : null,
     fetcher,
   );
-
-  const [tab, setTab] = useState<"comments" | "reviews" | "torrents">(
-    "comments",
+  const relatedSWR = useSWR<RelatedItem[]>(
+    idOrAlias ? `/anime/${idOrAlias}/related` : null,
+    fetcher,
   );
+
+  const [tab, setTab] = useState<
+    "comments" | "reviews" | "torrents" | "related"
+  >("comments");
   const [activeEp, setActiveEp] = useState<number>(1);
   const [activeSource, setActiveSource] = useState<DubSource | null>(null);
   const { user } = useAuth();
@@ -356,37 +361,192 @@ export default function AnimeClient() {
         <div className="card p-6 text-white/70">Эпизоды пока недоступны.</div>
       )}
 
-      {/* ----- Tabs (hidden for external Kodik-only titles) ----- */}
-      {!isExternal && (
-        <div>
-          <div className="mb-4 flex gap-2">
-            {(
-              [
-                ["comments", "Комментарии"],
-                ["reviews", "Рецензии"],
-                ["torrents", "Торренты"],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                className={clsx(
-                  "rounded-full border px-4 py-2 text-sm transition",
-                  tab === k
-                    ? "border-brand-400 bg-brand-500/15 text-brand-100"
-                    : "border-bg-border bg-bg-panel/60 text-white/70 hover:border-white/40",
-                )}
+      {/* ----- Tabs ----- */}
+      <Tabs
+        isExternal={isExternal}
+        tab={tab}
+        setTab={setTab}
+        related={relatedSWR.data ?? []}
+        relatedLoading={relatedSWR.isLoading}
+        release={r}
+      />
+    </div>
+  );
+}
+
+function Tabs({
+  isExternal,
+  tab,
+  setTab,
+  related,
+  relatedLoading,
+  release,
+}: {
+  isExternal: boolean;
+  tab: "comments" | "reviews" | "torrents" | "related";
+  setTab: (t: "comments" | "reviews" | "torrents" | "related") => void;
+  related: RelatedItem[];
+  relatedLoading: boolean;
+  release: Release;
+}) {
+  // Available tabs depend on whether this is an AniLibria-keyed title or an
+  // ext-shiki Kodik-only title (those don't have an integer release_id, so
+  // comments/reviews/torrents don't apply to them).
+  const hasRelated = relatedLoading || related.length > 0;
+  const allTabs: { id: typeof tab; label: string; badge?: string }[] = isExternal
+    ? hasRelated
+      ? [{ id: "related", label: "Связанное", badge: String(related.length) }]
+      : []
+    : [
+        { id: "comments", label: "Комментарии" },
+        ...(hasRelated
+          ? [
+              {
+                id: "related" as const,
+                label: "Связанное",
+                badge: String(related.length),
+              },
+            ]
+          : []),
+        { id: "reviews", label: "Рецензии" },
+        { id: "torrents", label: "Торренты" },
+      ];
+
+  // For external (where comments/reviews are unavailable), force the active
+  // tab to one we actually render.
+  useEffect(() => {
+    if (allTabs.length === 0) return;
+    if (!allTabs.find((t) => t.id === tab)) setTab(allTabs[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExternal, hasRelated]);
+
+  if (allTabs.length === 0) return null;
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {allTabs.map(({ id, label, badge }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={clsx(
+              "rounded-full border px-4 py-2 text-sm transition",
+              tab === id
+                ? "border-brand-400 bg-brand-500/15 text-brand-100"
+                : "border-bg-border bg-bg-panel/60 text-white/70 hover:border-white/40",
+            )}
+          >
+            {label}
+            {badge && Number(badge) > 0 ? (
+              <span className="ml-1.5 text-xs text-white/55">{badge}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {tab === "torrents" && !isExternal && (
+        <TorrentsList idOrAlias={release.alias || release.id} />
+      )}
+      {tab === "comments" && !isExternal && (
+        <Comments releaseId={release.id as number} />
+      )}
+      {tab === "reviews" && !isExternal && (
+        <Reviews releaseId={release.id as number} />
+      )}
+      {tab === "related" && (
+        <RelatedList items={related} loading={relatedLoading} />
+      )}
+    </div>
+  );
+}
+
+function RelatedList({
+  items,
+  loading,
+}: {
+  items: RelatedItem[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return <div className="card p-6 text-white/55">Загружаем связанные тайтлы...</div>;
+  }
+  if (items.length === 0) {
+    return (
+      <div className="card p-6 text-white/55">Связанных тайтлов не найдено.</div>
+    );
+  }
+  // Group by relation_label so sequels/movies/etc. are visually clustered.
+  const groups = new Map<string, RelatedItem[]>();
+  for (const it of items) {
+    const k = it.relation_label || "Другое";
+    const arr = groups.get(k);
+    if (arr) arr.push(it);
+    else groups.set(k, [it]);
+  }
+  // Stable order: sequel/prequel/etc first, then alphabetical.
+  const PRIORITY = [
+    "Сиквел",
+    "Приквел",
+    "Спин-офф",
+    "Побочная история",
+    "Альтернативная версия",
+    "Альтернативный мир",
+    "Сборник",
+    "Адаптация",
+  ];
+  const ordered = Array.from(groups.entries()).sort(([a], [b]) => {
+    const ai = PRIORITY.indexOf(a);
+    const bi = PRIORITY.indexOf(b);
+    if (ai >= 0 && bi >= 0) return ai - bi;
+    if (ai >= 0) return -1;
+    if (bi >= 0) return 1;
+    return a.localeCompare(b);
+  });
+
+  return (
+    <div className="space-y-5">
+      {ordered.map(([label, list]) => (
+        <div key={label}>
+          <div className="mb-2 text-xs font-medium uppercase tracking-wider text-white/55">
+            {label} ({list.length})
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {list.map((it) => (
+              <Link
+                key={it.shikimori_id}
+                href={`/anime?id=${encodeURIComponent(it.alias)}`}
+                className="group block overflow-hidden rounded-xl border border-bg-border bg-bg-panel/60 transition hover:border-brand-400"
               >
-                {label}
-              </button>
+                <div className="relative aspect-[2/3] w-full overflow-hidden bg-bg-elevated">
+                  {it.image ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={it.image}
+                      alt={it.title ?? ""}
+                      loading="lazy"
+                      className="h-full w-full object-cover transition group-hover:scale-[1.03]"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-white/40">
+                      Нет постера
+                    </div>
+                  )}
+                </div>
+                <div className="p-2">
+                  <div className="line-clamp-2 text-sm font-medium text-white/90 group-hover:text-white">
+                    {it.title || it.title_orig || "—"}
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-white/55">
+                    {it.year && <span>{it.year}</span>}
+                    {it.kind && <span>· {it.kind.toUpperCase()}</span>}
+                    {it.score ? <span>· {it.score}</span> : null}
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
-
-          {tab === "torrents" && <TorrentsList idOrAlias={r.alias || r.id} />}
-          {tab === "comments" && <Comments releaseId={r.id as number} />}
-          {tab === "reviews" && <Reviews releaseId={r.id as number} />}
         </div>
-      )}
+      ))}
     </div>
   );
 }
