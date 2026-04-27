@@ -60,8 +60,8 @@ export default function AnimeClient() {
     fetcher,
   );
 
-  const [tab, setTab] = useState<"about" | "comments" | "reviews" | "torrents">(
-    "about",
+  const [tab, setTab] = useState<"comments" | "reviews" | "torrents">(
+    "torrents",
   );
   const [activeEp, setActiveEp] = useState<number>(1);
   const [activeSource, setActiveSource] = useState<DubSource | null>(null);
@@ -69,9 +69,25 @@ export default function AnimeClient() {
 
   const sources = useMemo(() => dubsSWR.data?.sources ?? [], [dubsSWR.data]);
 
-  // Auto-pick a source as soon as the dubs response arrives.
+  // Reset the active source when navigating between anime pages — Next.js
+  // keeps the same component mounted, so without this the previous title's
+  // source (and its 24 episodes) leaks onto the new title.
   useEffect(() => {
-    if (!activeSource && sources.length) {
+    setActiveSource(null);
+    setActiveEp(1);
+  }, [idOrAlias]);
+
+  // Auto-pick a source as soon as the dubs response arrives. Also re-pick if
+  // the current activeSource is not part of the new sources list (defensive
+  // against stale state across navigations).
+  useEffect(() => {
+    if (!sources.length) return;
+    const stillValid =
+      activeSource &&
+      sources.some(
+        (s) => s.provider === activeSource.provider && s.studio === activeSource.studio,
+      );
+    if (!stillValid) {
       setActiveSource(pickDefault(sources));
     }
   }, [sources, activeSource]);
@@ -98,6 +114,8 @@ export default function AnimeClient() {
     if (!activeSource || !activeEpisode) return;
     const releaseId = releaseSWR.data?.id;
     if (!releaseId) return;
+    // History is keyed by integer release_id; skip ext (Kodik-only) titles.
+    if (typeof releaseId === "string" && releaseId.startsWith("ext-")) return;
     const epName =
       activeSource.provider === "anilibria"
         ? (activeEpisode as DubAnilibriaEpisode).name
@@ -139,6 +157,12 @@ export default function AnimeClient() {
 
   const r = releaseSWR.data;
   const meta = metaSWR.data;
+  // Kodik-only titles use a synthesized string id (`ext-shiki-<id>`). User-data
+  // features (lists / ratings / comments / reviews) are keyed by integer
+  // `release_id` in the DB, so we hide them for external titles. Player, dubs,
+  // meta and external ratings still work.
+  const isExternal =
+    typeof r.id === "string" && String(r.id).startsWith("ext-");
   const titleMain = r.name.main;
   const titleEn = r.name.english;
   // Latin/romaji title from Jikan ("Kimetsu no Yaiba"), fall back to AniLibria
@@ -232,9 +256,11 @@ export default function AnimeClient() {
                   </Link>
                 ))}
               </div>
-              <RatingWidget releaseId={r.id} />
+              {!isExternal && <RatingWidget releaseId={r.id as number} />}
               <RatingsBar idOrAlias={r.alias || r.id} />
-              <ListPicker releaseId={r.id} className="pt-1" />
+              {!isExternal && (
+                <ListPicker releaseId={r.id as number} className="pt-1" />
+              )}
             </div>
           </div>
         </div>
@@ -330,39 +356,37 @@ export default function AnimeClient() {
         <div className="card p-6 text-white/70">Эпизоды пока недоступны.</div>
       )}
 
-      {/* ----- Tabs ----- */}
-      <div>
-        <div className="mb-4 flex gap-2">
-          {(
-            [
-              ["about", "О тайтле"],
-              ["torrents", "Торренты"],
-              ["reviews", "Рецензии"],
-              ["comments", "Комментарии"],
-            ] as const
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={clsx(
-                "rounded-full border px-4 py-2 text-sm transition",
-                tab === k
-                  ? "border-brand-400 bg-brand-500/15 text-brand-100"
-                  : "border-bg-border bg-bg-panel/60 text-white/70 hover:border-white/40",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* ----- Tabs (hidden for external Kodik-only titles) ----- */}
+      {!isExternal && (
+        <div>
+          <div className="mb-4 flex gap-2">
+            {(
+              [
+                ["torrents", "Торренты"],
+                ["reviews", "Рецензии"],
+                ["comments", "Комментарии"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={clsx(
+                  "rounded-full border px-4 py-2 text-sm transition",
+                  tab === k
+                    ? "border-brand-400 bg-brand-500/15 text-brand-100"
+                    : "border-bg-border bg-bg-panel/60 text-white/70 hover:border-white/40",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-        {tab === "about" && <Stats r={r} />}
-        {tab === "torrents" && (
-          <TorrentsList idOrAlias={r.alias || r.id} />
-        )}
-        {tab === "comments" && <Comments releaseId={r.id} />}
-        {tab === "reviews" && <Reviews releaseId={r.id} />}
-      </div>
+          {tab === "torrents" && <TorrentsList idOrAlias={r.alias || r.id} />}
+          {tab === "comments" && <Comments releaseId={r.id as number} />}
+          {tab === "reviews" && <Reviews releaseId={r.id as number} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -563,35 +587,4 @@ function EpisodesList({
   );
 }
 
-function Stats({ r }: { r: Release }) {
-  const rows: [string, string | number | null | undefined][] = [
-    ["Тип", r.type?.description],
-    ["Год", r.year],
-    ["Сезон", r.season?.description],
-    ["Возраст", r.age_rating?.label],
-    ["День выхода", r.publish_day?.description],
-    [
-      "Длительность серии",
-      r.average_duration_of_episode ? `${r.average_duration_of_episode} мин` : null,
-    ],
-    ["Эпизодов", r.episodes_total],
-    ["В избранном", r.added_in_users_favorites],
-    ["Смотрят сейчас", r.added_in_watching_collection],
-    ["Запланировали", r.added_in_planned_collection],
-    ["Просмотрено", r.added_in_watched_collection],
-  ].filter(([, v]) => v !== null && v !== undefined && v !== "") as [
-    string,
-    string | number,
-  ][];
 
-  return (
-    <div className="card grid gap-x-6 gap-y-3 p-6 text-sm md:grid-cols-3">
-      {rows.map(([k, v]) => (
-        <div key={k} className="flex items-center justify-between gap-3 text-white/75">
-          <span className="text-white/55">{k}</span>
-          <span className="font-medium text-white">{v}</span>
-        </div>
-      ))}
-    </div>
-  );
-}

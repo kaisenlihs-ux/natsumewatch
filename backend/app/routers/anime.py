@@ -4,9 +4,44 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.anilibria import anilibria
 from app.jikan import jikan
-from app.kodik import kodik
+from app.kodik import kodik, kodik_to_release_shape
+from app.shikimori import shikimori
 
 router = APIRouter(prefix="/api/anime", tags=["anime"])
+
+_EXT_PREFIX = "ext-shiki-"
+
+
+def _is_ext_alias(id_or_alias: str) -> bool:
+    return str(id_or_alias).startswith(_EXT_PREFIX)
+
+
+def _ext_shikimori(id_or_alias: str) -> str:
+    return str(id_or_alias)[len(_EXT_PREFIX):]
+
+
+async def _load_release(id_or_alias: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Resolve a release by AniLibria id/alias or our synthesized ext-shiki-* alias.
+
+    Returns (release_dict, kodik_items). For AniLibria releases the kodik items
+    are deferred (empty list) so callers that don't need them avoid a Kodik
+    round-trip; the dubs/meta/ratings endpoints fetch Kodik separately as
+    needed. For ext aliases the Kodik items list is the source of truth and is
+    populated up-front."""
+    if _is_ext_alias(id_or_alias):
+        shiki = _ext_shikimori(id_or_alias)
+        items = await kodik.search_by_shikimori(shiki, with_episodes=True)
+        if not items:
+            raise HTTPException(404, f"External title {id_or_alias!r} not found in Kodik")
+        rel = kodik_to_release_shape(items[0])
+        if rel is None:
+            raise HTTPException(404, "Kodik item missing shikimori_id")
+        return rel, items
+    try:
+        rel = await anilibria.release(id_or_alias)
+    except RuntimeError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return rel, []
 
 
 @router.get("/latest")
@@ -28,8 +63,96 @@ async def featured() -> list[dict[str, Any]]:
 
 
 @router.get("/search")
-async def search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50)) -> list:
-    return await anilibria.search(q, limit=limit)
+async def search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(10, ge=1, le=50),
+    include_external: bool = Query(True),
+) -> list:
+    """Search by title.
+
+    AniLibria is queried first. When ``include_external`` is true (default), we
+    also query Kodik and append titles missing from the AniLibria result by a
+    normalized title comparison. Kodik items are returned in the same shape as
+    AniLibria releases with the synthesized ``ext-shiki-<id>`` alias so the
+    detail page knows how to load them."""
+    al_items: list[dict[str, Any]] = []
+    try:
+        al_items = await anilibria.search(q, limit=limit)
+    except RuntimeError:
+        al_items = []
+    if not include_external:
+        return al_items
+
+    al_titles = set()
+    for item in al_items:
+        n = item.get("name") or {}
+        for k in ("main", "english", "alternative"):
+            t = _norm_text(n.get(k))
+            if t:
+                al_titles.add(t)
+
+    # Direct Kodik text search — works well for Latin / Japanese romaji queries
+    # (Kodik indexes title and title_orig in those scripts).
+    kodik_items: list[dict[str, Any]] = []
+    try:
+        kodik_items = await kodik.search(
+            title=q, title_orig=q, with_episodes=False, limit=20
+        )
+    except Exception:  # noqa: BLE001
+        kodik_items = []
+
+    # Kodik's own text search doesn't index Russian titles — but Shikimori
+    # does. Resolve the query through Shikimori → shikimori_id → Kodik.
+    try:
+        shiki_hits = await shikimori.search(q, limit=10)
+    except Exception:  # noqa: BLE001
+        shiki_hits = []
+
+    seen_shiki: set[str] = set()
+
+    async def _add_kitems(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        rels: list[dict[str, Any]] = []
+        for kitem in items:
+            if _is_red_tail_dorama(kitem):
+                continue
+            rel = kodik_to_release_shape(kitem)
+            if rel is None:
+                continue
+            shiki = rel["external_shikimori_id"]
+            if shiki in seen_shiki:
+                continue
+            seen_shiki.add(shiki)
+            rel_titles = {
+                _norm_text((rel.get("name") or {}).get("main")),
+                _norm_text((rel.get("name") or {}).get("english")),
+                _norm_text((rel.get("name") or {}).get("alternative")),
+            }
+            rel_titles.discard("")
+            if rel_titles & al_titles:
+                continue
+            rels.append(rel)
+        return rels
+
+    out = list(al_items)
+    out.extend(await _add_kitems(kodik_items))
+
+    # Pull Kodik items by shikimori_id for hits that the text search missed.
+    for hit in shiki_hits:
+        sid = hit.get("id")
+        if not sid or str(sid) in seen_shiki:
+            continue
+        if len(out) >= limit + 10:
+            break
+        try:
+            items = await kodik.search_by_shikimori(sid, with_episodes=False)
+        except Exception:  # noqa: BLE001
+            continue
+        if not items:
+            continue
+        out.extend(await _add_kitems(items[:1]))
+        if len(out) >= limit + 10:
+            break
+    return out[: limit + 10]
 
 
 @router.get("/catalog")
@@ -87,18 +210,19 @@ async def references() -> dict[str, Any]:
 
 @router.get("/{id_or_alias}")
 async def release(id_or_alias: str) -> dict[str, Any]:
-    try:
-        return await anilibria.release(id_or_alias)
-    except RuntimeError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    rel, _ = await _load_release(id_or_alias)
+    return rel
 
 
 @router.get("/{id_or_alias}/torrents")
 async def release_torrents(id_or_alias: str) -> dict[str, Any]:
     """Normalized torrent list straight from AniLibria (1080p/720p/480p with
-    magnet + .torrent download links + episode range)."""
+    magnet + .torrent download links + episode range). Returns an empty list
+    for external (Kodik-only) titles."""
     from app.config import settings
 
+    if _is_ext_alias(id_or_alias):
+        return {"release_id": id_or_alias, "alias": id_or_alias, "torrents": []}
     try:
         rel = await anilibria.release(id_or_alias)
     except RuntimeError as exc:
@@ -224,15 +348,16 @@ def _extract_external_ratings(
     rel: dict[str, Any], kodik_items: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    out.append(
-        {
-            "source": "AniLibria",
-            "value": rel.get("age_rating", {}).get("label"),
-            "votes": None,
-            "url": f"https://anilibria.top/anime/releases/release/{rel.get('alias')}",
-            "kind": "label",
-        }
-    )
+    if rel.get("external_provider") != "kodik":
+        out.append(
+            {
+                "source": "AniLibria",
+                "value": (rel.get("age_rating") or {}).get("label"),
+                "votes": None,
+                "url": f"https://anilibria.top/anime/releases/release/{rel.get('alias')}",
+                "kind": "label",
+            }
+        )
 
     first = kodik_items[0] if kodik_items else {}
     md = (first.get("material_data") if isinstance(first, dict) else None) or {}
@@ -333,21 +458,21 @@ def _kodik_episodes(
 
 @router.get("/{id_or_alias}/ratings")
 async def release_ratings(id_or_alias: str) -> dict[str, Any]:
-    try:
-        rel = await anilibria.release(id_or_alias)
-    except RuntimeError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    rel, ext_items = await _load_release(id_or_alias)
 
     name = rel.get("name") or {}
     year = rel.get("year")
     en_title = name.get("english")
     main_title = name.get("main")
-    items: list[dict[str, Any]] = []
-    if en_title:
-        items = await kodik.search(title=en_title, year=year, with_episodes=False)
-    if not items and main_title:
-        items = await kodik.search(title=main_title, year=year, with_episodes=False)
-    items = [item for item in items if _kodik_matches_release(item, rel)]
+    if ext_items:
+        items = ext_items
+    else:
+        items = []
+        if en_title:
+            items = await kodik.search(title=en_title, year=year, with_episodes=False)
+        if not items and main_title:
+            items = await kodik.search(title=main_title, year=year, with_episodes=False)
+        items = [item for item in items if _kodik_matches_release(item, rel)]
 
     ratings = _extract_external_ratings(rel, items)
     jikan_item = await jikan.search_best(
@@ -402,10 +527,7 @@ def _ru_source_label(source: str | None) -> str | None:
 
 @router.get("/{id_or_alias}/meta")
 async def release_meta(id_or_alias: str) -> dict[str, Any]:
-    try:
-        rel = await anilibria.release(id_or_alias)
-    except RuntimeError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    rel, ext_items = await _load_release(id_or_alias)
 
     name = rel.get("name") or {}
     en_title = name.get("english")
@@ -439,12 +561,15 @@ async def release_meta(id_or_alias: str) -> dict[str, Any]:
 
     if not studios:
         # Fallback to Kodik material_data anime_studios when Jikan is silent.
-        items: list[dict[str, Any]] = []
-        if en_title:
-            items = await kodik.search(title=en_title, year=year, with_episodes=False)
-        if not items and main_title:
-            items = await kodik.search(title=main_title, year=year, with_episodes=False)
-        items = [it for it in items if _kodik_matches_release(it, rel)]
+        if ext_items:
+            items = ext_items
+        else:
+            items = []
+            if en_title:
+                items = await kodik.search(title=en_title, year=year, with_episodes=False)
+            if not items and main_title:
+                items = await kodik.search(title=main_title, year=year, with_episodes=False)
+            items = [it for it in items if _kodik_matches_release(it, rel)]
         for it in items:
             md = it.get("material_data") or {}
             for label in md.get("anime_studios") or []:
@@ -472,10 +597,7 @@ async def release_meta(id_or_alias: str) -> dict[str, Any]:
 @router.get("/{id_or_alias}/dubs")
 async def dubs(id_or_alias: str) -> dict[str, Any]:
     """Aggregate available voice-over options across AniLibria and Kodik."""
-    try:
-        rel = await anilibria.release(id_or_alias)
-    except RuntimeError as exc:
-        raise HTTPException(404, str(exc)) from exc
+    rel, ext_items = await _load_release(id_or_alias)
 
     # 1) Native AniLibria source (if episodes exist with HLS).
     sources: list[dict[str, Any]] = []
@@ -510,15 +632,20 @@ async def dubs(id_or_alias: str) -> dict[str, Any]:
     en_title = name.get("english")
     main_title = name.get("main")
     year = rel.get("year")
-    items: list[dict[str, Any]] = []
-    if en_title:
-        items = await kodik.search(title=en_title, year=year, with_episodes=True)
-    if not items and main_title:
-        items = await kodik.search(title=main_title, year=year, with_episodes=True)
+    if ext_items:
+        items = ext_items
+        skip_match_check = True
+    else:
+        items = []
+        if en_title:
+            items = await kodik.search(title=en_title, year=year, with_episodes=True)
+        if not items and main_title:
+            items = await kodik.search(title=main_title, year=year, with_episodes=True)
+        skip_match_check = False
 
     grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
     for item in items:
-        if not _kodik_matches_release(item, rel):
+        if not skip_match_check and not _kodik_matches_release(item, rel):
             continue
         if _is_red_tail_dorama(item):
             continue

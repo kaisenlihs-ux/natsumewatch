@@ -156,5 +156,116 @@ class KodikClient:
         self._cache[cache_key] = (now + self._cache_ttl, results)
         return results
 
+    async def search_by_shikimori(
+        self, shikimori_id: str | int, *, with_episodes: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return every Kodik release/serial entry for a given shikimori_id."""
+        cache_key = f"shiki::{shikimori_id}::{with_episodes}"
+        now = time.time()
+        cached = self._cache.get(cache_key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+        params: dict[str, Any] = {
+            "shikimori_id": str(shikimori_id),
+            "limit": 100,
+            "with_episodes": "true" if with_episodes else "false",
+            "with_material_data": "true",
+        }
+        data = await self._request("/search", params)
+        results = (data or {}).get("results", []) if isinstance(data, dict) else []
+        self._cache[cache_key] = (now + self._cache_ttl, results)
+        return results
+
+
+def kodik_item_external_id(item: dict[str, Any]) -> str | None:
+    """Stable external id we use for ext-aliases. Prefers shikimori_id."""
+    for key in ("shikimori_id", "kinopoisk_id", "imdb_id", "worldart_link"):
+        v = item.get(key)
+        if v:
+            return f"{key}:{v}"
+    return None
+
+
+def kodik_to_release_shape(item: dict[str, Any]) -> dict[str, Any] | None:
+    """Convert a Kodik catalog item into an AniLibria-compatible release shape.
+
+    Returns ``None`` when the item lacks an external id (we need it for the
+    ``ext-<shikimori>`` alias roundtrip)."""
+    md = item.get("material_data") or {}
+    shiki = item.get("shikimori_id") or md.get("shikimori_id")
+    if not shiki:
+        return None
+    title_main = (
+        item.get("title")
+        or md.get("title")
+        or md.get("title_en")
+        or item.get("title_orig")
+        or "Без названия"
+    )
+    title_orig = item.get("title_orig") or md.get("title_japanese")
+    title_en = md.get("title_en") or item.get("title")
+    year = item.get("year") or md.get("year")
+    poster = (
+        md.get("poster_url")
+        or md.get("anime_poster_url")
+        or item.get("material_data", {}).get("poster_url")
+        or None
+    )
+    description = md.get("anime_description") or md.get("description") or ""
+    raw_genres = md.get("anime_genres") or md.get("genres") or []
+    genres = [
+        {"id": idx, "name": g, "image": None}
+        for idx, g in enumerate(raw_genres)
+        if g
+    ]
+    episodes_total = (
+        md.get("episodes_total")
+        or md.get("episodes_aired")
+        or item.get("episodes_count")
+    )
+    raw_type = (md.get("anime_kind") or md.get("type") or "").lower()
+    type_map = {
+        "tv": ("TV", "ТВ"),
+        "movie": ("MOVIE", "Фильм"),
+        "ova": ("OVA", "OVA"),
+        "ona": ("ONA", "ONA"),
+        "special": ("SPECIAL", "Спешл"),
+        "music": ("MUSIC", "Музыка"),
+    }
+    type_obj: dict[str, Any] | None = None
+    if raw_type in type_map:
+        v, d = type_map[raw_type]
+        type_obj = {"value": v, "description": d}
+    age_rating_label = md.get("rating_mpaa") or md.get("minimal_age")
+    return {
+        "id": f"ext-shiki-{shiki}",
+        "alias": f"ext-shiki-{shiki}",
+        "external_provider": "kodik",
+        "external_shikimori_id": str(shiki),
+        "name": {
+            "main": title_main,
+            "english": title_en if title_en and title_en != title_main else None,
+            "alternative": title_orig if title_orig and title_orig != title_main else None,
+        },
+        "description": description,
+        "year": year,
+        "season": None,
+        "type": type_obj,
+        "age_rating": (
+            {"label": str(age_rating_label)} if age_rating_label else None
+        ),
+        "publish_status": None,
+        "production_status": None,
+        "is_ongoing": (md.get("anime_status") or "").lower() == "ongoing",
+        "average_duration_of_episode": md.get("duration"),
+        "episodes_total": episodes_total,
+        "genres": genres,
+        "poster": {"src": poster} if poster else None,
+        "torrents": [],
+        "added_in_users_favorites": None,
+        "added_in_planned_collection": None,
+    }
+
 
 kodik = KodikClient()
