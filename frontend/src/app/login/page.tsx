@@ -2,16 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Already authenticated — bounce to home rather than show the form.
+  useEffect(() => {
+    if (user) router.replace("/");
+  }, [user, router]);
+  if (user) return null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { Logo } from "./Logo";
+import { useAuth } from "@/lib/auth";
 
 export function Footer() {
+  const { user } = useAuth();
   return (
     <footer className="mt-24 border-t border-bg-border/60 bg-bg-base/60">
       <div className="container-page flex flex-col gap-6 py-10 md:flex-row md:items-start md:justify-between">
@@ -28,15 +32,37 @@ export function Footer() {
           </div>
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-wider text-white/40">Аккаунт</div>
-            <Link href="/login" className="block text-white/80 hover:text-white">
-              Войти
-            </Link>
-            <Link href="/register" className="block text-white/80 hover:text-white">
-              Регистрация
-            </Link>
-            <Link href="/profile" className="block text-white/80 hover:text-white">
-              Профиль
-            </Link>
+            {user ? (
+              <>
+                <Link href="/profile" className="block text-white/80 hover:text-white">
+                  Профиль
+                </Link>
+                <Link
+                  href="/profile/lists"
+                  className="block text-white/80 hover:text-white"
+                >
+                  Мои списки
+                </Link>
+                <Link
+                  href="/profile/settings"
+                  className="block text-white/80 hover:text-white"
+                >
+                  Настройки
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="block text-white/80 hover:text-white">
+                  Войти
+                </Link>
+                <Link
+                  href="/register"
+                  className="block text-white/80 hover:text-white"
+                >
+                  Регистрация
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
