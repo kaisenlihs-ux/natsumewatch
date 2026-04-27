@@ -61,7 +61,7 @@ export default function AnimeClient() {
   );
 
   const [tab, setTab] = useState<"comments" | "reviews" | "torrents">(
-    "torrents",
+    "comments",
   );
   const [activeEp, setActiveEp] = useState<number>(1);
   const [activeSource, setActiveSource] = useState<DubSource | null>(null);
@@ -362,9 +362,9 @@ export default function AnimeClient() {
           <div className="mb-4 flex gap-2">
             {(
               [
-                ["torrents", "Торренты"],
-                ["reviews", "Рецензии"],
                 ["comments", "Комментарии"],
+                ["reviews", "Рецензии"],
+                ["torrents", "Торренты"],
               ] as const
             ).map(([k, label]) => (
               <button

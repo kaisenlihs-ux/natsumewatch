@@ -8,10 +8,18 @@ type Props = {
   url: string | null | undefined;
   size?: number;
   className?: string;
+  shape?: "circle" | "square";
 };
 
-export function Avatar({ username, url, size = 64, className }: Props) {
+export function Avatar({
+  username,
+  url,
+  size = 64,
+  className,
+  shape = "circle",
+}: Props) {
   const resolved = resolveMediaUrl(url ?? null);
+  const radiusClass = shape === "square" ? "rounded-xl" : "rounded-full";
   if (resolved) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -22,7 +30,8 @@ export function Avatar({ username, url, size = 64, className }: Props) {
         height={size}
         style={{ width: size, height: size }}
         className={clsx(
-          "rounded-full object-cover ring-2 ring-bg-border/50",
+          radiusClass,
+          "object-cover ring-2 ring-bg-border/50",
           className,
         )}
       />
@@ -32,7 +41,8 @@ export function Avatar({ username, url, size = 64, className }: Props) {
     <span
       style={{ width: size, height: size, fontSize: size / 2.6 }}
       className={clsx(
-        "grid place-items-center rounded-full bg-gradient-to-br from-brand-500 to-accent-600 font-bold uppercase text-white",
+        radiusClass,
+        "grid place-items-center bg-gradient-to-br from-brand-500 to-accent-600 font-bold uppercase text-white",
         className,
       )}
     >

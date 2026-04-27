@@ -51,6 +51,39 @@ class Comment(Base):
     user: Mapped[User] = relationship(back_populates="comments")
 
 
+class CommentLike(Base):
+    __tablename__ = "comment_likes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    comment_id: Mapped[int] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "comment_id", name="uq_clike_user_comment"),
+    )
+
+
+class CommentVote(Base):
+    """Reddit-style up/down vote per user per comment. value is +1 or -1."""
+
+    __tablename__ = "comment_votes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    comment_id: Mapped[int] = mapped_column(
+        ForeignKey("comments.id", ondelete="CASCADE"), index=True
+    )
+    value: Mapped[int] = mapped_column(Integer)  # +1 or -1
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "comment_id", name="uq_cvote_user_comment"),
+    )
+
+
 class Review(Base):
     __tablename__ = "reviews"
 

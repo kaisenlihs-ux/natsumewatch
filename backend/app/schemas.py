@@ -48,8 +48,16 @@ class CommentOut(BaseModel):
     parent_id: int | None
     created_at: datetime
     user: UserPublic
+    like_count: int = 0
+    score: int = 0  # net up - down votes
+    liked_by_me: bool = False
+    vote_by_me: int = 0  # -1 / 0 / 1
 
     model_config = {"from_attributes": True}
+
+
+class CommentVoteIn(BaseModel):
+    value: int = Field(ge=-1, le=1)  # -1 down, 0 clear, +1 up
 
 
 class ReviewIn(BaseModel):

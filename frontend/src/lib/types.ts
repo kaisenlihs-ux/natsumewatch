@@ -115,6 +115,10 @@ export type Comment = {
   parent_id: number | null;
   created_at: string;
   user: PublicUser;
+  like_count: number;
+  score: number;
+  liked_by_me: boolean;
+  vote_by_me: number;
 };
 
 export type Review = {
