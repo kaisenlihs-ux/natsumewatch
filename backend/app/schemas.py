@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 class UserPublic(BaseModel):
     id: int
     username: str
+    friend_id: str | None = None
     avatar_url: str | None = None
     banner_url: str | None = None
     bio: str | None = None
@@ -188,3 +189,40 @@ class ProfileStats(BaseModel):
     by_genre: list[StatsBucket]
     by_type: list[StatsBucket]
     by_year: list[StatsBucket]
+
+
+# ----------------------- Friends & messages -----------------------
+
+
+class FriendRequestIn(BaseModel):
+    # Either a username or a numeric friend_id (digits-only string).
+    target: str = Field(min_length=1, max_length=64)
+
+
+class FriendOut(BaseModel):
+    friendship_id: int
+    user: UserPublic
+    last_message: str | None = None
+    last_message_at: datetime | None = None
+    unread: int = 0
+
+
+class FriendRequestOut(BaseModel):
+    id: int
+    user: UserPublic  # the *other* party (requester for incoming, target for outgoing)
+    created_at: datetime
+
+
+class MessageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class MessageOut(BaseModel):
+    id: int
+    from_user_id: int
+    to_user_id: int
+    body: str
+    created_at: datetime
+    read_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

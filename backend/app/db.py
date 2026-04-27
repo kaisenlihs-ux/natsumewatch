@@ -34,6 +34,12 @@ _LIGHTWEIGHT_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
         "ALTER TABLE users ADD COLUMN history_enabled BOOLEAN NOT NULL DEFAULT 1",
     ),
     ("users", "last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at DATETIME"),
+    ("users", "friend_id", "ALTER TABLE users ADD COLUMN friend_id VARCHAR(16)"),
+)
+
+
+_EXTRA_DDL: tuple[str, ...] = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_friend_id ON users(friend_id)",
 )
 
 
@@ -49,6 +55,11 @@ async def _apply_lightweight_migrations() -> None:
                 logger.info("applied migration: %s", ddl)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("migration %s failed: %s", ddl, exc)
+        for ddl in _EXTRA_DDL:
+            try:
+                await conn.execute(text(ddl))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("extra ddl %s failed: %s", ddl, exc)
 
 
 async def init_db() -> None:

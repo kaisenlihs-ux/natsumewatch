@@ -67,6 +67,12 @@ export function Header() {
           <Link href="/profile/lists?status=watching" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-bg-elevated">
             Мои списки
           </Link>
+          <Link href="/friends" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-bg-elevated">
+            Друзья
+          </Link>
+          <Link href="/messages" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-bg-elevated">
+            Сообщения
+          </Link>
           <Link href="/profile/settings" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-bg-elevated">
             Настройки
           </Link>
@@ -176,6 +182,8 @@ export function Header() {
               <>
                 <Link href="/profile" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Профиль</Link>
                 <Link href="/profile/lists?status=watching" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Мои списки</Link>
+                <Link href="/friends" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Друзья</Link>
+                <Link href="/messages" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Сообщения</Link>
                 <Link href="/profile/settings" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Настройки</Link>
               </>
             ) : (

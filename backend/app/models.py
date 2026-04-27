@@ -22,6 +22,12 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # 6–10 digit numeric friend code shown on profile and used as a "friend by id"
+    # search target. Allocated on signup. Stored as a string to preserve any
+    # leading-zero cases that the random generator could in theory produce.
+    friend_id: Mapped[str | None] = mapped_column(
+        String(16), unique=True, index=True, nullable=True
+    )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -202,3 +208,53 @@ class WatchHistory(Base):
     watched_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), index=True
     )
+
+
+# ---------------------------------------------------------------------------
+# Friendships & 1:1 chat
+# ---------------------------------------------------------------------------
+
+# Friendship statuses: pending (request sent, not accepted), accepted.
+# Reject/cancel deletes the row entirely instead of leaving a tombstone.
+FRIENDSHIP_STATUSES: tuple[str, ...] = ("pending", "accepted")
+
+
+class Friendship(Base):
+    """Directed friend request that turns symmetric once accepted.
+
+    `user_id` is the requester, `target_id` is the recipient. When the
+    target accepts, status becomes "accepted" and the row's direction is
+    no longer meaningful — both sides see each other as a friend.
+    """
+
+    __tablename__ = "friendships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "target_id", name="uq_friendship_pair"),
+    )
+
+
+class Message(Base):
+    """Single direct message between two users."""
+
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    from_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    to_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True
+    )
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

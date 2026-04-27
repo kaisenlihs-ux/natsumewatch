@@ -98,6 +98,7 @@ export type References = {
 export type User = {
   id: number;
   username: string;
+  friend_id: string | null;
   email: string;
   avatar_url: string | null;
   banner_url: string | null;
@@ -108,6 +109,34 @@ export type User = {
 };
 
 export type PublicUser = Omit<User, "email" | "history_enabled">;
+
+export type Friend = {
+  friendship_id: number;
+  user: PublicUser;
+  last_message: string | null;
+  last_message_at: string | null;
+  unread: number;
+};
+
+export type FriendRequest = {
+  id: number;
+  user: PublicUser;
+  created_at: string;
+};
+
+export type DirectMessage = {
+  id: number;
+  from_user_id: number;
+  to_user_id: number;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type Conversation = {
+  user: PublicUser;
+  messages: DirectMessage[];
+};
 
 export type Comment = {
   id: number;

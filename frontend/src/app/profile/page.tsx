@@ -296,6 +296,20 @@ function ProfileHeader({ user }: { user: User }) {
             <UserOnlineDot userId={user.id} showLabel className="text-white/70" />
           </div>
           <div className="text-sm text-white/55">{user.email}</div>
+          {user.friend_id && (
+            <div className="flex items-center gap-2 text-xs text-white/55">
+              <span>ID для друзей:</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(user.friend_id ?? "").catch(() => {});
+                }}
+                className="rounded-md border border-bg-border bg-bg-elevated/50 px-2 py-0.5 font-mono text-xs text-white hover:border-brand-400"
+                title="Скопировать"
+              >
+                #{user.friend_id}
+              </button>
+            </div>
+          )}
           <div className="text-xs text-white/40">
             Зарегистрирован {new Date(user.created_at).toLocaleDateString("ru-RU")}
           </div>
