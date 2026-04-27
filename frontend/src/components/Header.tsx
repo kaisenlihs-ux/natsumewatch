@@ -118,18 +118,20 @@ export function Header() {
 
         <OnlineBadge className="hidden lg:flex" />
 
-        <div className="ml-auto flex items-center gap-2 md:hidden">
-          <Link href="/catalog" className="btn-icon" aria-label="Каталог">
-            <Icon path="M4 6h16M4 12h16M4 18h10" />
-          </Link>
-          <button className="btn-icon" aria-label="Поиск" onClick={() => setMobileSearch(true)}>
+        <div className="ml-auto flex items-center gap-1.5 md:hidden">
+          <button
+            className="btn-icon"
+            aria-label="Поиск"
+            onClick={() => setMobileSearch(true)}
+          >
             <Icon path="M11 19a8 8 0 1 1 5.3-14l4.7 4.7-1.4 1.4-4.7-4.7A6 6 0 1 0 17 11" />
           </button>
-          <Link href="/profile/settings" className="btn-icon" aria-label="Настройки">
-            <Icon path="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 1 0 12 8.5m8 3.5-1.8-.6a6.8 6.8 0 0 0-.5-1.2l.9-1.7-1.7-1.7-1.7.9a6.8 6.8 0 0 0-1.2-.5L13 4h-2l-.6 1.8a6.8 6.8 0 0 0-1.2.5l-1.7-.9-1.7 1.7.9 1.7a6.8 6.8 0 0 0-.5 1.2L4 12v2l1.8.6c.1.4.3.8.5 1.2l-.9 1.7 1.7 1.7 1.7-.9c.4.2.8.3 1.2.5L11 20h2l.6-1.8c.4-.1.8-.3 1.2-.5l1.7.9 1.7-1.7-.9-1.7c.2-.4.3-.8.5-1.2L20 14v-2Z" />
-          </Link>
           {profileButton}
-          <button className="btn-icon" aria-label="Меню" onClick={() => setMobileNav((v) => !v)}>
+          <button
+            className="btn-icon"
+            aria-label="Меню"
+            onClick={() => setMobileNav((v) => !v)}
+          >
             <Icon path="M4 7h16M4 12h16M4 17h16" />
           </button>
         </div>
@@ -174,6 +176,7 @@ export function Header() {
               <>
                 <Link href="/profile" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Профиль</Link>
                 <Link href="/profile/lists?status=watching" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Мои списки</Link>
+                <Link href="/profile/settings" className="rounded-xl px-3 py-2 text-sm text-white/80 hover:bg-bg-elevated hover:text-white">Настройки</Link>
               </>
             ) : (
               <>
