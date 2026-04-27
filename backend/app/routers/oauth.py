@@ -30,7 +30,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import User
 from app.routers.auth import allocate_friend_id
-from app.security import create_access_token
+from app.security import create_access_token, hash_password
 
 router = APIRouter(prefix="/api/auth", tags=["oauth"])
 
@@ -300,10 +300,13 @@ async def _find_or_create_user(
         session, profile.get("username") or f"{provider}_{subject[-6:]}"
     )
     fallback_email = email or f"{provider}_{subject}@oauth.local"
+    # OAuth-only users get a random password hash so they can't be guessed
+    # into via the email/password flow. They can later set a real password
+    # from settings if they want a non-OAuth login path.
     user = User(
         username=username,
         email=fallback_email,
-        password_hash=None,  # OAuth-only — set a password later via settings.
+        password_hash=hash_password(secrets.token_urlsafe(32)),
         oauth_provider=provider,
         oauth_subject=subject,
         avatar_url=profile.get("avatar_url"),
@@ -354,13 +357,18 @@ async def callback(
     if not profile.get("subject"):
         return _redirect_back(return_to, error="no_subject")
 
-    async with SessionLocal() as session:
-        user = await _find_or_create_user(session, provider, profile)
-        # Backfill friend_id for legacy local accounts that just linked OAuth.
-        if not user.friend_id:
-            user.friend_id = await allocate_friend_id(session)
-            await session.commit()
-            await session.refresh(user)
+    try:
+        async with SessionLocal() as session:
+            user = await _find_or_create_user(session, provider, profile)
+            if not user.friend_id:
+                user.friend_id = await allocate_friend_id(session)
+                await session.commit()
+                await session.refresh(user)
+    except Exception as exc:  # noqa: BLE001 - surface to user via redirect
+        import logging
+
+        logging.getLogger(__name__).exception("OAuth callback failed")
+        return _redirect_back(return_to, error=f"db_{exc.__class__.__name__}")
 
     jwt = create_access_token(user.id)
     return _redirect_back(return_to, token=jwt)
