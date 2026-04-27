@@ -116,7 +116,13 @@ export default function CatalogPage() {
             <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <div className={clsx(filtersOpen ? "" : "hidden md:block")}>
+        <div
+          className={clsx(
+            "collapsible collapsible-mobile-only",
+            filtersOpen && "is-open",
+          )}
+        >
+          <div className="collapsible-inner">
         <FilterHeader title="Поиск">
           <input
             value={f.search}
@@ -297,6 +303,7 @@ export default function CatalogPage() {
         >
           Сбросить
         </button>
+          </div>
         </div>
       </aside>
 

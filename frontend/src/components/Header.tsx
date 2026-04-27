@@ -60,7 +60,7 @@ export function Header() {
         <span className="hidden text-sm sm:block">{user.username}</span>
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border border-bg-border bg-bg-panel shadow-soft">
+        <div className="animate-pop-in absolute right-0 mt-2 w-52 overflow-hidden rounded-xl border border-bg-border bg-bg-panel shadow-soft">
           <Link href="/profile" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm hover:bg-bg-elevated">
             Профиль
           </Link>
@@ -148,7 +148,7 @@ export function Header() {
       </div>
 
       {mobileSearch && (
-        <div className="border-t border-bg-border/60 bg-bg-base/95 p-4 md:hidden">
+        <div className="animate-slide-down border-t border-bg-border/60 bg-bg-base/95 p-4 md:hidden">
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-medium">Поиск</div>
             <button className="text-sm text-white/60" onClick={() => setMobileSearch(false)}>
@@ -160,7 +160,7 @@ export function Header() {
       )}
 
       {mobileNav && (
-        <div className="border-t border-bg-border/60 bg-bg-base/95 md:hidden">
+        <div className="animate-slide-down border-t border-bg-border/60 bg-bg-base/95 md:hidden">
           <nav className="container-page grid gap-1 py-3">
             {NAV.map((l) => (
               <Link

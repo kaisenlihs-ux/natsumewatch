@@ -83,7 +83,7 @@ export function DubSwitcher({
                 <span>{meta.flag}</span>
                 <span>{meta.label}</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div key={`${lang}-${expanded ? "x" : "c"}`} className="animate-fade-in flex flex-wrap gap-1.5">
                 {items.map((s) => {
                   const k = sourceKey(s);
                   const isActive = k === activeKey;

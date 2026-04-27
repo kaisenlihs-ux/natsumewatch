@@ -81,6 +81,51 @@ body::before {
   .scrollbar-none { scrollbar-width: none; }
 }
 
+/* ----- Reusable open/close animations ----- */
+@keyframes pop-in {
+  0%   { opacity: 0; transform: translateY(-4px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes slide-down {
+  0%   { opacity: 0; transform: translateY(-8px); max-height: 0; }
+  100% { opacity: 1; transform: translateY(0); max-height: 1200px; }
+}
+@keyframes fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+.animate-pop-in {
+  animation: pop-in 0.16s ease-out both;
+  transform-origin: top right;
+}
+.animate-slide-down {
+  animation: slide-down 0.22s ease-out both;
+  overflow: hidden;
+}
+.animate-fade-in {
+  animation: fade-in 0.18s ease-out both;
+}
+
+/* Smooth height transitions when toggling collapsible content via state. */
+.collapsible {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
+}
+.collapsible.is-open {
+  grid-template-rows: 1fr;
+}
+.collapsible > .collapsible-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+/* Force the collapsible open on md+ — used by panels that should only collapse on mobile. */
+@media (min-width: 768px) {
+  .collapsible-mobile-only {
+    grid-template-rows: 1fr !important;
+  }
+}
+
 /* Custom video player styles */
 .player-wrap {
   @apply relative aspect-video w-full overflow-hidden rounded-2xl bg-black;
