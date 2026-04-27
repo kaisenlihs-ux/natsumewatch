@@ -56,13 +56,33 @@ export async function apiFetch<T = unknown>(
     }
   }
   if (!res.ok) {
-    const detail =
-      (data && typeof data === "object" && "detail" in data
-        ? String((data as { detail: unknown }).detail)
-        : null) || res.statusText;
-    throw new ApiError(res.status, detail, data);
+    throw new ApiError(res.status, formatDetail(data, res.statusText), data);
   }
   return data as T;
+}
+
+/** Convert a FastAPI error payload into a single human-readable string. */
+function formatDetail(data: unknown, fallback: string): string {
+  if (typeof data === "string" && data) return data;
+  if (data && typeof data === "object" && "detail" in data) {
+    const d = (data as { detail: unknown }).detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) {
+      const parts = d
+        .map((e) => {
+          if (e && typeof e === "object" && "msg" in e) {
+            return String((e as { msg: unknown }).msg);
+          }
+          return typeof e === "string" ? e : "";
+        })
+        .filter(Boolean);
+      if (parts.length) return parts.join("; ");
+    }
+    if (d && typeof d === "object" && "msg" in d) {
+      return String((d as { msg: unknown }).msg);
+    }
+  }
+  return fallback;
 }
 
 /** Send a multipart/form-data POST. Used for avatar/banner uploads. */
@@ -87,11 +107,7 @@ export async function apiUpload<T = unknown>(
     }
   }
   if (!res.ok) {
-    const detail =
-      (data && typeof data === "object" && "detail" in data
-        ? String((data as { detail: unknown }).detail)
-        : null) || res.statusText;
-    throw new ApiError(res.status, detail, data);
+    throw new ApiError(res.status, formatDetail(data, res.statusText), data);
   }
   return data as T;
 }
