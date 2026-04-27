@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { OAuthButtons } from "@/components/OAuthButtons";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -59,6 +60,7 @@ export default function LoginPage() {
             {busy ? "Входим..." : "Войти"}
           </button>
         </form>
+        <OAuthButtons />
         <p className="mt-4 text-center text-sm text-white/60">
           Нет аккаунта?{" "}
           <Link href="/register" className="text-brand-400 hover:underline">

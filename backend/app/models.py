@@ -29,7 +29,14 @@ class User(Base):
         String(16), unique=True, index=True, nullable=True
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    # Nullable for OAuth-only accounts (Discord/Google). Local accounts always
+    # have a hash. Setting/changing password is allowed via the settings page.
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Identifies the upstream OAuth provider (e.g. "discord", "google") and
+    # the provider-specific user id ("subject"). Composite unique constraint
+    # is enforced via the named index below.
+    oauth_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    oauth_subject: Mapped[str | None] = mapped_column(String(128), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     banner_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)

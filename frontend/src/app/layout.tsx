@@ -6,6 +6,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { PresenceProvider } from "@/components/PresenceProvider";
+import { OAuthRedirectHandler } from "@/components/OAuthRedirectHandler";
 
 const rubik = Rubik({
   subsets: ["latin", "cyrillic"],
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ru" className={rubik.variable}>
       <body>
         <PresenceProvider />
+        <OAuthRedirectHandler />
         <Header />
         <main className="container-page py-6 pb-24 md:py-10 md:pb-10">{children}</main>
         <Footer />

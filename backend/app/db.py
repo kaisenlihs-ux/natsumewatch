@@ -35,11 +35,23 @@ _LIGHTWEIGHT_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ),
     ("users", "last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at DATETIME"),
     ("users", "friend_id", "ALTER TABLE users ADD COLUMN friend_id VARCHAR(16)"),
+    (
+        "users",
+        "oauth_provider",
+        "ALTER TABLE users ADD COLUMN oauth_provider VARCHAR(32)",
+    ),
+    (
+        "users",
+        "oauth_subject",
+        "ALTER TABLE users ADD COLUMN oauth_subject VARCHAR(128)",
+    ),
 )
 
 
 _EXTRA_DDL: tuple[str, ...] = (
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_friend_id ON users(friend_id)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_oauth_pair "
+    "ON users(oauth_provider, oauth_subject)",
 )
 
 

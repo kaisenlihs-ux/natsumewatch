@@ -10,7 +10,7 @@ from app.config import settings
 from app.db import init_db
 from app.jikan import jikan
 from app.kodik import kodik
-from app.routers import anime, auth, friends, me, social, stats, users
+from app.routers import anime, auth, friends, me, oauth, social, stats, users
 from app.shikimori import shikimori
 
 
@@ -51,6 +51,7 @@ app.include_router(me.router)
 app.include_router(users.router)
 app.include_router(friends.router)
 app.include_router(friends.messages_router)
+app.include_router(oauth.router)
 
 # Static serving for user-uploaded media (avatars / banners). The directory is
 # created on startup; mounting before it exists raises RuntimeError.

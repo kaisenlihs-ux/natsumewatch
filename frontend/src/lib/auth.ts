@@ -9,6 +9,7 @@ type AuthState = {
   init: () => Promise<void>;
   login: (email_or_username: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<void>;
+  acceptToken: (access_token: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -51,6 +52,17 @@ export const useAuth = create<AuthState>((set, get) => ({
     });
     localStorage.setItem("nw_token", data.access_token);
     set({ user: data.user });
+  },
+  async acceptToken(access_token) {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("nw_token", access_token);
+    try {
+      const me = await apiFetch<User>("/auth/me");
+      set({ user: me, loading: false });
+    } catch {
+      localStorage.removeItem("nw_token");
+      set({ user: null, loading: false });
+    }
   },
   logout() {
     if (typeof window !== "undefined") localStorage.removeItem("nw_token");

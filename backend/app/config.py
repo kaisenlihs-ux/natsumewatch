@@ -36,5 +36,18 @@ class Settings(BaseSettings):
     online_window_seconds: int = 90
     max_upload_bytes: int = 5 * 1024 * 1024  # 5 MB
 
+    # OAuth providers. Empty client_id disables the provider entirely.
+    discord_oauth_client_id: str = ""
+    discord_oauth_client_secret: str = ""
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    # Public (browser-facing) URL of this API. Used to build OAuth redirect
+    # URIs that match what's registered with the provider. Falls back to the
+    # current request URL if empty.
+    oauth_redirect_base: str = ""
+    # Where to send the browser back to after login. Token + status are
+    # appended as query parameters (?token=..., ?error=...).
+    frontend_base_url: str = ""
+
 
 settings = Settings()

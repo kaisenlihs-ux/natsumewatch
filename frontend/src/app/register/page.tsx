@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { OAuthButtons } from "@/components/OAuthButtons";
 import { useAuth } from "@/lib/auth";
 
 export default function RegisterPage() {
@@ -73,6 +74,7 @@ export default function RegisterPage() {
             {busy ? "Создаём..." : "Создать аккаунт"}
           </button>
         </form>
+        <OAuthButtons />
         <p className="mt-4 text-center text-sm text-white/60">
           Уже есть аккаунт?{" "}
           <Link href="/login" className="text-brand-400 hover:underline">
