@@ -99,8 +99,21 @@ body::before {
   transform-origin: top right;
 }
 .animate-slide-down {
-  animation: slide-down 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-  overflow: hidden;
+  animation:
+    slide-down 0.45s cubic-bezier(0.22, 1, 0.36, 1) both,
+    slide-down-overflow 0.45s linear both;
+}
+/* Keep overflow hidden during the animation so max-height clips correctly,
+   then release it so absolutely-positioned children (e.g. the search
+   dropdown popover) aren't clipped by the slide-down container. */
+@keyframes slide-down-overflow {
+  0%,
+  99% {
+    overflow: hidden;
+  }
+  100% {
+    overflow: visible;
+  }
 }
 .animate-fade-in {
   animation: fade-in 0.35s ease-out both;
