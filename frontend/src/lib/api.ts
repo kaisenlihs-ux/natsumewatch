@@ -61,6 +61,16 @@ export async function apiFetch<T = unknown>(
   return data as T;
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  username: "Имя пользователя",
+  email: "Email",
+  password: "Пароль",
+  email_or_username: "Email/имя",
+  body: "Текст",
+  title: "Заголовок",
+  score: "Оценка",
+};
+
 /** Convert a FastAPI error payload into a single human-readable string. */
 function formatDetail(data: unknown, fallback: string): string {
   if (typeof data === "string" && data) return data;
@@ -71,7 +81,15 @@ function formatDetail(data: unknown, fallback: string): string {
       const parts = d
         .map((e) => {
           if (e && typeof e === "object" && "msg" in e) {
-            return String((e as { msg: unknown }).msg);
+            const obj = e as { msg: unknown; loc?: unknown };
+            const loc = Array.isArray(obj.loc) ? obj.loc : [];
+            // FastAPI body errors look like ["body", "<field>"], so the
+            // field name is the last array element.
+            const last = loc[loc.length - 1];
+            const field = typeof last === "string" ? last : null;
+            const label = field ? FIELD_LABELS[field] ?? field : null;
+            const msg = String(obj.msg);
+            return label ? `${label}: ${msg}` : msg;
           }
           return typeof e === "string" ? e : "";
         })

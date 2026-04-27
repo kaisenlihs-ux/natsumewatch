@@ -21,7 +21,14 @@ class UserMe(UserPublic):
 
 
 class RegisterIn(BaseModel):
-    username: str = Field(min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_\-]+$")
+    # Allow Latin, Cyrillic, digits, dot, dash, underscore. We deliberately keep
+    # this permissive — the only thing we really want to reject is whitespace
+    # and emoji-style unicode punctuation that breaks `/u/<username>` URLs.
+    username: str = Field(
+        min_length=3,
+        max_length=32,
+        pattern=r"^[a-zA-Z0-9\u0400-\u04FF._\-]+$",
+    )
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
 
