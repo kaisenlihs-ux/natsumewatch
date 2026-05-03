@@ -180,7 +180,7 @@ function Thread({ peer, myId }: { peer: string; myId: number }) {
               shape="square"
             />
             <Link
-              href={`/u/${data.user.username}`}
+              href={`/users?id=${data.user.id}`}
               className="truncate font-medium hover:text-brand-300"
             >
               {data.user.username}

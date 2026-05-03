@@ -83,7 +83,7 @@ export function Comments({ releaseId }: { releaseId: number }) {
           isReply && "ml-6 border-l-4 border-l-brand-500/50",
         )}
       >
-        <Link href={`/u/${c.user.username}`} className="shrink-0">
+        <Link href={`/users?id=${c.user.id}`} className="shrink-0">
           <Avatar
             username={c.user.username}
             url={c.user.avatar_url}
@@ -95,7 +95,7 @@ export function Comments({ releaseId }: { releaseId: number }) {
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-center gap-2 text-sm">
             <Link
-              href={`/u/${c.user.username}`}
+              href={`/users?id=${c.user.id}`}
               className="font-medium hover:text-brand-300"
             >
               {c.user.username}

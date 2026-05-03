@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -21,7 +22,32 @@ export function ListPicker({ releaseId, className }: Props) {
   const [open, setOpen] = useState(false);
   const [statuses, setStatuses] = useState<ListStatus[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; right: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !btnRef.current) return;
+    const update = () => {
+      const rect = btnRef.current!.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      });
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
 
   useEffect(() => {
     let alive = true;
@@ -43,7 +69,11 @@ export function ListPicker({ releaseId, className }: Props) {
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current && ref.current.contains(target)) return;
+      const portal = document.getElementById("list-picker-portal");
+      if (portal && portal.contains(target)) return;
+      setOpen(false);
     };
     window.addEventListener("click", onClick);
     return () => window.removeEventListener("click", onClick);
@@ -112,6 +142,7 @@ export function ListPicker({ releaseId, className }: Props) {
     <div ref={ref} className={clsx("flex items-center gap-2", className)}>
       <div className="relative">
         <button
+          ref={btnRef}
           disabled={busy || statuses === null}
           onClick={() => setOpen((o) => !o)}
           className={clsx(
@@ -125,30 +156,41 @@ export function ListPicker({ releaseId, className }: Props) {
           {label}
           <span className="ml-1 opacity-60">▾</span>
         </button>
-        {open && (
-          <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-xl border border-bg-border bg-bg-panel shadow-soft">
-            {PRIMARY.map((s) => (
-              <button
-                key={s}
-                onClick={() => setPrimary(s)}
-                className={clsx(
-                  "block w-full px-4 py-2.5 text-left text-sm hover:bg-bg-elevated",
-                  primary === s && "bg-bg-elevated text-brand-300",
-                )}
-              >
-                {STATUS_LABELS[s]}
-              </button>
-            ))}
-            {primary && (
-              <button
-                onClick={() => setPrimary(null)}
-                className="block w-full border-t border-bg-border px-4 py-2.5 text-left text-sm text-brand-400 hover:bg-bg-elevated"
-              >
-                Убрать из списка
-              </button>
-            )}
-          </div>
-        )}
+        {open && mounted && coords &&
+          createPortal(
+            <div
+              id="list-picker-portal"
+              style={{
+                position: "fixed",
+                top: coords.top,
+                right: coords.right,
+                zIndex: 100,
+              }}
+              className="w-56 overflow-hidden rounded-xl border border-bg-border bg-bg-panel shadow-soft"
+            >
+              {PRIMARY.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setPrimary(s)}
+                  className={clsx(
+                    "block w-full px-4 py-2.5 text-left text-sm hover:bg-bg-elevated",
+                    primary === s && "bg-bg-elevated text-brand-300",
+                  )}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              ))}
+              {primary && (
+                <button
+                  onClick={() => setPrimary(null)}
+                  className="block w-full border-t border-bg-border px-4 py-2.5 text-left text-sm text-brand-400 hover:bg-bg-elevated"
+                >
+                  Убрать из списка
+                </button>
+              )}
+            </div>,
+            document.body,
+          )}
       </div>
       <button
         title={isFav ? "Убрать из избранного" : "В избранное"}

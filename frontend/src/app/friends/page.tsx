@@ -239,7 +239,7 @@ function FriendRow({
 }) {
   return (
     <div className="flex items-center gap-3 p-3">
-      <Link href={`/u/${friend.user.username}`} className="shrink-0">
+      <Link href={`/users?id=${friend.user.id}`} className="shrink-0">
         <Avatar
           username={friend.user.username}
           url={friend.user.avatar_url}
@@ -250,7 +250,7 @@ function FriendRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link
-            href={`/u/${friend.user.username}`}
+            href={`/users?id=${friend.user.id}`}
             className="truncate font-medium hover:text-brand-300"
           >
             {friend.user.username}
@@ -305,7 +305,7 @@ function RequestRow({
 }) {
   return (
     <div className="flex items-center gap-3 p-3">
-      <Link href={`/u/${request.user.username}`} className="shrink-0">
+      <Link href={`/users?id=${request.user.id}`} className="shrink-0">
         <Avatar
           username={request.user.username}
           url={request.user.avatar_url}
@@ -315,7 +315,7 @@ function RequestRow({
       </Link>
       <div className="min-w-0 flex-1">
         <Link
-          href={`/u/${request.user.username}`}
+          href={`/users?id=${request.user.id}`}
           className="truncate font-medium hover:text-brand-300"
         >
           {request.user.username}
@@ -359,12 +359,12 @@ function UserSearchRow({
   const [busy, setBusy] = useState(false);
   return (
     <div className="flex items-center gap-3 px-2 py-3">
-      <Link href={`/u/${u.username}`} className="shrink-0">
+      <Link href={`/users?id=${u.id}`} className="shrink-0">
         <Avatar username={u.username} url={u.avatar_url} size={44} shape="square" />
       </Link>
       <div className="min-w-0 flex-1">
         <Link
-          href={`/u/${u.username}`}
+          href={`/users?id=${u.id}`}
           className="truncate font-medium hover:text-brand-300"
         >
           {u.username}
